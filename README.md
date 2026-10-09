@@ -21,7 +21,12 @@ An airliner circles the planet between the two countries.
 
 **Side A, Netlandia (transport)** is laid out in three bands so the networks don't
 pile up: regional rings through the western towns, the countrywide RLS mesh across
-the middle, and the Capitalia metro on the east coast.
+the middle, and the Capitalia metro on the east coast. Isla Verde, off the east coast, is
+the stepping stone for the subsea cables.
+
+**The submarine network wraps round the planet.** Its region runs from the strait
+and Isla Verde across the ocean to Packetland's three landing coasts, so it can be
+found, and opened, from either side; both sides' panels list it.
 
 **Side B, Packetland (data network)** has Coreburg in the middle with its pair of
 core routers, the IP core meshed out to each corner, an aggregation ring hugging

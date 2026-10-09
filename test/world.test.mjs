@@ -161,6 +161,9 @@ test('the sites that define each network stand inside its region on the globe', 
   for (const n of world.nodes) {
     for (const m in own) if (own[m](n) && regionAt(n.x, n.z, n.side) !== m) bad.push(`${n.id} should be in ${m}, is in ${regionAt(n.x, n.z, n.side)}`);
   }
-  for (const [x, z] of [[58, 22], [-122, 16]]) assert.equal(regionAt(x, z, 0), 'submarine');
+  for (const [x, z] of [[58, 22], [-122, 16], [92, 6]]) assert.equal(regionAt(x, z, 0), 'submarine', `A ${x},${z}`);
+  // ...and the submarine network wraps round to Packetland's landing coasts
+  for (const [x, z] of [[-80, 14], [52, 56], [80, -22]]) assert.equal(regionAt(x, z, 1), 'submarine', `B ${x},${z}`);
+  for (const n of world.nodes.filter((x) => x.type === 'cls')) assert.equal(regionAt(n.x, n.z, n.side) === 'submarine' || n.side === 0 && n.x < 60, true, n.id);
   assert.deepEqual(bad, []);
 });

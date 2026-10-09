@@ -129,20 +129,20 @@ const halos = {};
   const one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
   for (const m of MAJORS) {
     const spots = [];
-    for (const [cx, cz, r] of m.region) {
+    for (const [cx, cz, r, cs = m.side] of m.region) {
       for (let x = cx - r; x <= cx + r; x += 1.9) for (let z = cz - r; z <= cz + r; z += 1.9) {
         const d = Math.hypot(x - cx, z - cz) / r;
-        if (d > 1 || regionAt(x, z, m.side) !== m.id) continue;
+        if (d > 1 || Math.hypot(x, z) > 156 || regionAt(x, z, cs) !== m.id) continue;
         // feather the edge
         if (Math.random() > 1.25 - d) continue;
-        spots.push([x, z]);
+        spots.push([x, z, cs]);
       }
     }
     const mat = new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0, depthWrite: false });
     const mesh = new THREE.InstancedMesh(hex, mat, spots.length);
-    spots.forEach(([x, z], i) => {
-      const h = Math.max(0.05, heightAt(x, z, m.side)) + 0.25;
-      mesh.setMatrixAt(i, m4.compose(sph(x, h, z, m.side, p), frameAt(x, z, m.side, q).multiply(qx), one));
+    spots.forEach(([x, z, cs], i) => {
+      const h = Math.max(0.05, heightAt(x, z, cs)) + 0.25;
+      mesh.setMatrixAt(i, m4.compose(sph(x, h, z, cs, p), frameAt(x, z, cs, q).multiply(qx), one));
     });
     mesh.renderOrder = 5;
     mesh.raycast = () => {};
@@ -245,7 +245,7 @@ let listedSide = null;
 function listSide(side) {
   if (side === listedSide) return;
   listedSide = side;
-  list.replaceChildren(...MAJORS.filter((m) => m.side === side).map((m) => {
+  list.replaceChildren(...MAJORS.filter((m) => m.side === side || m.both).map((m) => {
     const row = document.createElement('li');
     row.innerHTML = `
       <button class="major" data-major="${m.id}" style="--c:${m.color}">
@@ -564,7 +564,9 @@ function showTip(ev, color, title, sub) {
   const r = canvas.getBoundingClientRect();
   tip.style.setProperty('--c', color);
   tip.innerHTML = `<b>${title}</b><span>${sub}</span>`;
-  tip.style.transform = `translate(${ev.clientX - r.left + 14}px, ${ev.clientY - r.top + 14}px)`;
+  // keep the tip on screen: open it to the left near the right edge
+  const flip = ev.clientX - r.left > r.width - 340;
+  tip.style.transform = `translate(${ev.clientX - r.left + (flip ? -14 : 14)}px, ${ev.clientY - r.top + 14}px)${flip ? ' translateX(-100%)' : ''}`;
   tip.hidden = false;
 }
 function hover() {

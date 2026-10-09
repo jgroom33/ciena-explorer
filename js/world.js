@@ -612,8 +612,12 @@ export const MAJORS = [
   {
     id: 'submarine', side: 0, name: 'Submarine network', color: LAYER.submarine.color, layers: ['submarine'],
     blurb: 'Cables on the sea floor from Capitalia, Isla Verde and Westmoor, three of them wrapping round the planet to land in Packetland, with repeaters spaced along the seabed.',
-    place: 'The harbour, the strait and the open sea',
-    region: [[58, 22, 22], [100, 44, 16], [-122, 16, 18], [70, 70, 20]],
+    place: 'The strait, Isla Verde and the ocean, all the way round',
+    // a region on both sides: the strait and Isla Verde, the open ocean, and the
+    // three landing coasts of Packetland ([x, z, r, side]; side defaults to A)
+    both: true,
+    region: [[58, 22, 22], [92, 6, 22], [96, 30, 16], [112, 46, 18], [-122, 16, 18], [70, 70, 20], [-140, 30, 20],
+      [-80, 14, 16, 1], [46, 50, 14, 1], [80, -22, 16, 1], [110, 0, 18, 1], [-110, 24, 18, 1]],
     owns: (l) => l.layer === 'submarine',
   },
   {
@@ -661,8 +665,8 @@ export const MAJOR = Object.fromEntries(MAJORS.map((m) => [m.id, m]));
 export function regionAt(x, z, side) {
   let best = null, bestD = 1;
   for (const m of MAJORS) {
-    if (m.side !== side) continue;
-    for (const [cx, cz, r] of m.region) {
+    for (const [cx, cz, r, cs = m.side] of m.region) {
+      if (cs !== side) continue;
       const d = Math.hypot(x - cx, z - cz) / r;
       if (d < bestD) { bestD = d; best = m.id; }
     }
