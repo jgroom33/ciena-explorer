@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import { buildWorld, LAYERS, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir, dirToFlat, METRO, MAJORS, MAJOR, majorParts } from './world.js';
+import { buildWorld, LAYERS, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir, dirToFlat, MAJORS, MAJOR, majorParts, SIDES } from './world.js';
 import {
   buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, buildCable, routerPole, place, sph,
 } from './scene.js';
@@ -34,10 +34,13 @@ const UP = new THREE.Vector3(0, 1, 0);
 // toward the horizon as it comes in close, the way a little-planet game frames it.
 const rig = new THREE.PerspectiveCamera(38, 1, 1, 3000);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3000);
-const dirOf = (x, z) => new THREE.Vector3(...flatToDir(x, z));
-// Open over the home country, a little west so the panel doesn't hide Westmoor.
-const HOME = { dir: dirOf(-32, 8), dist: R + 245 };
-rig.position.copy(HOME.dir).multiplyScalar(HOME.dist);
+const dirOf = (x, z, side = 0) => new THREE.Vector3(...flatToDir(x, z, side));
+// Each side opens framed on its country, nudged so the panel doesn't hide its west coast.
+const HOMES = SIDES.map((s) => dirOf(...s.home, s.id));
+const HOME_H = 245;
+rig.position.copy(HOMES[0]).multiplyScalar(R + HOME_H);
+// Side A faces +Z, side B faces -Z.
+const sideInView = () => (rig.position.z >= 0 ? 0 : 1);
 
 const controls = new OrbitControls(rig, canvas);
 controls.target.set(0, 0, 0);
@@ -104,7 +107,7 @@ const blinkers = [], puffs = [];
 for (const n of world.nodes) {
   const home = n.layers[0];
   const g = modelFor(n, LAYER[home].color);
-  place(g, n.x, nodeYs[n.id], n.z);
+  place(g, n.x, nodeYs[n.id], n.z, 0, n.side);
   g.userData.node = n;
   g.traverse((o) => {
     o.userData.nodeId = n.id;
@@ -114,10 +117,6 @@ for (const n of world.nodes) {
   scene.add(g);
   nodeObjs[n.id] = g;
   pickables.push(g);
-  if (n.type === 'router') {
-    const host = world.byId[n.host];
-    g.add(routerPole(0, -0.4, nodeYs[host.id] + 3 - nodeYs[n.id], 0, LAYER.mpls.color));
-  }
 }
 
 const linkObjs = {};
@@ -129,7 +128,7 @@ for (const l of world.links) {
 }
 
 // Traffic: little glowing packets running both ways along every link.
-const SPEED = { dci: 16, backbone: 20, regional: 13, submarine: 14, mpls: 15, access: 8 };
+const SPEED = { dci: 16, backbone: 20, regional: 13, metro: 15, submarine: 14, ipcore: 18, agg: 13, access: 8, xhaul: 10 };
 const packets = {};
 for (const layer of LAYERS) {
   const runs = [];
@@ -203,7 +202,8 @@ const height = () => rig.position.length() - R;
 
 const TYPE_LABEL = {
   dc: 'Data center', pop: 'RLS ROADM site', hub: 'Metro hub', regional: 'Regional ring hut', ila: 'RLS amplifier hut',
-  cls: 'Cable landing station', repeater: 'Undersea repeater', router: 'MPLS router',
+  cls: 'Cable landing station', repeater: 'Undersea repeater', core: 'Core router', agg: 'Aggregation router',
+  xhub: '5G pre-aggregation hub', ixp: 'Internet exchange',
   access: 'Access node', ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
 };
 
@@ -214,22 +214,42 @@ function majorStats(id) {
   switch (id) {
     case 'submarine': return `${parts[id].links.length} cables · ${c((n) => n.type === 'cls')} landing stations · ${c((n) => n.type === 'repeater')} repeaters`;
     case 'longhaul': return `${c((n) => n.id.startsWith('bb_'))} ROADMs · ${c((n) => n.type === 'ila')} amplifier huts`;
-    case 'metro': return `${c((n) => n.type === 'dc')} data centers · ${c((n) => n.type === 'router')} routers · ${c((n) => n.id.startsWith('end_'))} customers`;
+    case 'metro': return `${c((n) => n.type === 'hub')} metro hubs · ${c((n) => n.type === 'dc')} data centers`;
+    case 'ipcore': return `${c((n) => n.type === 'core')} core routers · ${c((n) => n.type === 'dc')} data centers · 1 internet exchange`;
+    case 'aggregation': return `${c((n) => n.type === 'agg')} aggregation routers · ${c((n) => n.id.startsWith('end_'))} business customers`;
+    case 'xhaul': return `${c((n) => n.type === 'xhub')} hubs · ${c((n) => n.type === 'tower')} cell sites`;
   }
   return '';
 }
 
+// The panel lists the three networks on whichever side of the globe is in view;
+// the switch above it spins the globe round to the other side.
 const list = $('#majors');
-for (const m of MAJORS) {
-  const row = document.createElement('li');
-  row.innerHTML = `
-    <button class="major" data-major="${m.id}" style="--c:${m.color}">
-      <span class="wire" aria-hidden="true"></span>
-      <span class="txt"><span class="nm">${m.name}</span><span class="st">${majorStats(m.id)}</span></span>
-      <span class="go" aria-hidden="true">Open</span>
-    </button>`;
-  list.append(row);
+let listedSide = null;
+function listSide(side) {
+  if (side === listedSide) return;
+  listedSide = side;
+  list.replaceChildren(...MAJORS.filter((m) => m.side === side).map((m) => {
+    const row = document.createElement('li');
+    row.innerHTML = `
+      <button class="major" data-major="${m.id}" style="--c:${m.color}">
+        <span class="wire${LAYER[m.layers[0]].data ? ' dashed' : ''}" aria-hidden="true"></span>
+        <span class="txt"><span class="nm">${m.name}</span><span class="st">${majorStats(m.id)}</span></span>
+        <span class="go" aria-hidden="true">Open</span>
+      </button>`;
+    return row;
+  }));
+  for (const b of document.querySelectorAll('[data-side]')) b.setAttribute('aria-pressed', String(+b.dataset.side === side));
+  $('#side-name').textContent = `${SIDES[side].land} · ${SIDES[side].name.toLowerCase()}`;
 }
+for (const b of document.querySelectorAll('[data-side]')) {
+  b.addEventListener('click', () => {
+    const side = +b.dataset.side;
+    flyToDir(HOMES[side], HOME_H);
+    listSide(side);
+  });
+}
+listSide(0);
 list.addEventListener('click', (e) => {
   const b = e.target.closest('[data-major]');
   if (b) openMajor(b.dataset.major);
@@ -274,9 +294,10 @@ function openMajor(id) {
   emphasise(null);
   controls.enabled = false;
   detailControls.enabled = true;
-  const d = detail.extent * 1.55 / Math.min(1, detailCam.aspect || 1);
-  detailControls.target.set(0, 0, 0);
-  detailCam.position.setFromSphericalCoords(d, 0.85, 0.3);
+  const d = detail.extent * (detail.space.sphere ? 1.85 : 1.55) / Math.min(1, detailCam.aspect || 1);
+  detailControls.target.copy(detail.center);
+  detailCam.position.copy(detail.center).addScaledVector(detail.viewDir, d);
+  detailCam.up.set(0, 1, 0);
   detailControls.minDistance = detail.extent * 0.12;
   detailControls.maxDistance = detail.extent * 4;
   detailControls.update();
@@ -304,7 +325,8 @@ function openMajor(id) {
     el.style.setProperty('--c', LAYER[n.layers[0]].color);
     el.textContent = n.name;
     detailLabels.append(el);
-    return { el, pos: detail.nodeObjs[n.id].position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0)) };
+    const o = detail.nodeObjs[n.id];
+    return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
   });
   panel.hidden = true;
   detailPanel.hidden = false;
@@ -351,9 +373,10 @@ function selectInDetail(id) {
   if (!id) { card.hidden = true; return; }
   const n = world.byId[id];
   const layer = LAYER[n.layers[0]];
-  ring.position.copy(detail.nodeObjs[id].position).setY(n.type === 'router' ? detail.nodeObjs[id].position.y - 0.6 * detail.space.k : 0.2);
+  ring.position.copy(detail.nodeObjs[id].position);
+  ring.quaternion.copy(detail.nodeObjs[id].quaternion);
   ring.scale.setScalar(n.type === 'dc' ? 2 : n.type === 'ila' || n.type === 'repeater' ? 0.5 : 1);
-  ring.material.color.set(layer.color);
+  detail.ringMesh.material.color.set(layer.color);
   card.style.setProperty('--c', layer.color);
   const inView = new Set(detail.links.map((l) => l.id));
   const neighbours = [...new Set(n.links.filter((lid) => inView.has(lid)).map((lid) => {
@@ -385,7 +408,7 @@ for (const c of world.cities) {
   el.className = 'lbl city' + (c.town ? ' town' : '') + (c.big ? ' big' : '');
   el.textContent = c.name;
   labelLayer.append(el);
-  labels.push({ el, pos: sph(c.x, Math.max(0, heightAt(c.x, c.z)) + (c.town ? 4 : 9), c.z), town: c.town });
+  labels.push({ el, pos: sph(c.x, Math.max(0, heightAt(c.x, c.z, c.side)) + (c.town ? 4 : 9), c.z, c.side), town: c.town });
 }
 for (const n of world.nodes.filter((x) => x.type === 'dc' || (x.type === 'cls' && x.id.endsWith('far')))) {
   const el = document.createElement('div');
@@ -393,7 +416,7 @@ for (const n of world.nodes.filter((x) => x.type === 'dc' || (x.type === 'cls' &
   el.style.setProperty('--c', LAYER[n.layers[0]].color);
   el.textContent = n.name;
   labelLayer.append(el);
-  labels.push({ el, pos: sph(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z), node: n.id, tag: true });
+  labels.push({ el, pos: sph(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z, n.side), node: n.id, tag: true });
 }
 const tip = document.createElement('div');
 tip.className = 'lbl tip';
@@ -460,8 +483,9 @@ function pickMajor(ev) {
   if (best) return best;
   if (ray.ray.intersectSphere(planetBall, _hit)) {
     _hit.normalize();
-    const [x, z] = dirToFlat(_hit.x, _hit.y, _hit.z);
-    if (Math.hypot(x - METRO.x, z - METRO.z) < 24) return 'metro';
+    const [x, z, side] = dirToFlat(_hit.x, _hit.y, _hit.z);
+    const m = MAJORS.find((mm) => mm.area && mm.side === side && Math.hypot(x - mm.area.x, z - mm.area.z) < mm.area.r);
+    if (m) return m.id;
   }
   return null;
 }
@@ -547,6 +571,7 @@ function frame(now) {
     stepFlight(now);
     controls.update();
     aimCamera();
+    if (!flight) listSide(sideInView());
     for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
     movePackets(t);
     for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
@@ -558,7 +583,7 @@ function frame(now) {
   } else {
     detailControls.update();
     detail.update(t, opts.traffic);
-    detail.ring.rotation.z = t;
+    detail.ringMesh.rotation.z = t;
     hover();
     const r = canvas.getBoundingClientRect();
     for (const L of detail.labels) {

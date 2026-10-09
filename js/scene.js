@@ -1,8 +1,8 @@
 // Everything three.js: the little planet, towns, equipment models, cables and traffic.
 import * as THREE from 'three';
 import {
-  SEA_FLOOR, PLANET_R, heightAt, landness, icy, smoothstep, linkPath, samplePath, pathLength, distToSegment,
-  flatToDir, dirToFlat, squeeze, CAPS,
+  SEA_FLOOR, PLANET_R, LAYER, heightAt, heightDir, landness, icy, smoothstep, linkPath, linkDirs, linkLength,
+  samplePath, distToSegment, flatToDir, dirToFlat, squeeze,
 } from './world.js';
 
 export const INK = new THREE.Color('#1d2a44');
@@ -78,26 +78,26 @@ function gable(w, h, d, color, y) {
 // ---------------------------------------------------------------- planet
 
 // Flat map point (x, z) at height y -> position on the planet.
-export function sph(x, y, z, out = new THREE.Vector3()) {
-  const [a, b, c] = flatToDir(x, z);
+export function sph(x, y, z, side = 0, out = new THREE.Vector3()) {
+  const [a, b, c] = flatToDir(x, z, side);
   return out.set(a, b, c).multiplyScalar(PLANET_R + y);
 }
 
 // Orientation that stands an object upright on the planet at (x, z), with its
 // local +x pointing map-east and +z map-south, as it would on the flat map.
 const _e = new THREE.Vector3(), _u = new THREE.Vector3(), _so = new THREE.Vector3(), _bm = new THREE.Matrix4();
-export function frameAt(x, z, out = new THREE.Quaternion()) {
-  sph(x, 0, z, _u).normalize();
-  sph(x + 0.05, 0, z, _e).sub(sph(x - 0.05, 0, z, _so));
+export function frameAt(x, z, side = 0, out = new THREE.Quaternion()) {
+  sph(x, 0, z, side, _u).normalize();
+  sph(x + 0.05, 0, z, side, _e).sub(sph(x - 0.05, 0, z, side, _so));
   _so.crossVectors(_e, _u).normalize();
   _e.crossVectors(_u, _so).normalize();
   return out.setFromRotationMatrix(_bm.makeBasis(_e, _u, _so));
 }
 
 // Put an object on the planet where it would sit on the flat map.
-export function place(obj, x, y, z, ry = 0) {
-  sph(x, y, z, obj.position);
-  frameAt(x, z, obj.quaternion);
+export function place(obj, x, y, z, ry = 0, side = 0) {
+  sph(x, y, z, side, obj.position);
+  frameAt(x, z, side, obj.quaternion);
   if (ry) obj.rotateY(ry);
   return obj;
 }
@@ -120,11 +120,11 @@ export function buildPlanet(scene) {
     const key = `${v.x.toFixed(5)},${v.y.toFixed(5)},${v.z.toFixed(5)}`;
     let hit = cache.get(key);
     if (!hit) {
-      const [x, z] = dirToFlat(v.x, v.y, v.z);
-      const h = heightAt(x, z);
+      const [x, z, side] = dirToFlat(v.x, v.y, v.z);
+      const h = heightAt(x, z, side);
       if (h < 0) c.copy(pal.deep).lerp(pal.shelf, smoothstep(SEA_FLOOR, -1, h));
-      else if (icy(x, z)) c.copy(pal.ice);
-      else if (h < 0.9 && landness(x, z) < 0.12) c.copy(pal.sand);
+      else if (icy(x, z, side)) c.copy(pal.ice);
+      else if (h < 0.9 && landness(x, z, side) < 0.12) c.copy(pal.sand);
       else if (h > 13) c.copy(pal.snow);
       else if (h > 8) c.copy(pal.rock);
       else if (h > 4.5) c.copy(pal.hill);
@@ -163,17 +163,19 @@ export function buildPlanet(scene) {
 
   // Foam: white dabs where land meets water.
   const foam = [];
-  for (let x = -200; x < 200; x += 1.6) {
-    for (let z = -170; z < 240; z += 1.6) {
-      if (Math.hypot(x, z) > 290) continue;
-      const h = heightAt(x, z);
-      if (h < 0 && h > -0.9 && landness(x, z) > -0.04 && Math.random() < squeeze(x, z) + 0.1) foam.push([x, z]);
+  for (const side of [0, 1]) {
+    for (let x = -158; x < 158; x += 1.6) {
+      for (let z = -158; z < 158; z += 1.6) {
+        if (Math.hypot(x, z) > 157) continue;
+        const h = heightAt(x, z, side);
+        if (h < 0 && h > -0.9 && landness(x, z, side) > -0.04 && Math.random() < squeeze(x, z) + 0.1) foam.push([x, z, side]);
+      }
     }
   }
   const foamMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(0.9, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false }), foam.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qx = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
   const one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
-  foam.forEach(([x, z], i) => foamMesh.setMatrixAt(i, m4.compose(sph(x, 0.04, z, p), frameAt(x, z, q).multiply(qx), one)));
+  foam.forEach(([x, z, side], i) => foamMesh.setMatrixAt(i, m4.compose(sph(x, 0.04, z, side, p), frameAt(x, z, side, q).multiply(qx), one)));
   foamMesh.renderOrder = 4;
   foamMesh.raycast = () => {};
   scene.add(foamMesh);
@@ -196,8 +198,8 @@ function instanced(geo, items, { line = 0.1, shadow = true, faceted = false } = 
   const size = new THREE.Vector3();
   geo.boundingBox.getSize(size);
   items.forEach((it, i) => {
-    sph(it.x, it.y, it.z, _p);
-    frameAt(it.x, it.z, _q).multiply(_qy.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0));
+    sph(it.x, it.y, it.z, it.side || 0, _p);
+    frameAt(it.x, it.z, it.side || 0, _q).multiply(_qy.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0));
     _s.set(it.sx, it.sy, it.sz);
     body.setMatrixAt(i, _m.compose(_p, _q, _s));
     body.setColorAt(i, _c.set(it.color));
@@ -229,15 +231,15 @@ function rand(seed) {
 function cableSegments(world) {
   const segs = [];
   for (const l of world.links) {
-    if (l.layer === 'mpls' || l.sea) continue;
-    const p = linkPath(world, l);
-    for (let i = 1; i < p.length; i++) segs.push([p[i - 1][0], p[i - 1][1], p[i][0], p[i][1]]);
+    if (l.sea) continue;
+    const p = linkPath(world, l), side = world.byId[l.a].side;
+    for (let i = 1; i < p.length; i++) segs.push([p[i - 1][0], p[i - 1][1], p[i][0], p[i][1], side]);
   }
   return segs;
 }
-const clearOf = (segs, nodes, x, z, cable, node) =>
-  segs.every((s) => distToSegment(x, z, ...s) > cable) &&
-  nodes.every((n) => Math.hypot(n.x - x, n.z - z) > node);
+const clearOf = (segs, nodes, side, x, z, cable, node) =>
+  segs.every((s) => s[4] !== side || distToSegment(x, z, s[0], s[1], s[2], s[3]) > cable) &&
+  nodes.every((n) => n.side !== side || Math.hypot(n.x - x, n.z - z) > node);
 
 // ---------------------------------------------------------------- towns and scenery
 
@@ -257,17 +259,17 @@ export function buildTowns(world) {
         const d = Math.hypot(x - c.x, z - c.z) / c.r;
         if (d > 1 || r() < 0.12) continue;
         const jx = x + (r() - 0.5) * 0.4, jz = z + (r() - 0.5) * 0.4;
-        if (heightAt(jx, jz) < 0.6 || !clearOf(segs, ground, jx, jz, 1.5, 2.6)) continue;
-        const y = heightAt(jx, jz) - 0.3;
+        if (heightAt(jx, jz, c.side) < 0.6 || !clearOf(segs, ground, c.side, jx, jz, 1.5, 2.6)) continue;
+        const y = heightAt(jx, jz, c.side) - 0.3, side = c.side;
         const color = BUILDING_COLORS[Math.floor(r() * BUILDING_COLORS.length)];
         if (c.town || (d > 0.6 && r() < 0.6)) {
           const w = 1.1 + r() * 0.5, dd = 0.9 + r() * 0.4, h = 0.9 + r() * 0.5, ry = r() < 0.5 ? 0 : Math.PI / 2;
-          towers.push({ x: jx, y, z: jz, sx: w, sy: h + 0.3, sz: dd, color, ry });
-          roofs.push({ x: jx, y: y + h + 0.3, z: jz, sx: dd + 0.15, sy: 1.1, sz: w + 0.15, color: ROOF_COLORS[Math.floor(r() * ROOF_COLORS.length)], ry: ry + Math.PI / 2 });
+          towers.push({ x: jx, y, z: jz, side, sx: w, sy: h + 0.3, sz: dd, color, ry });
+          roofs.push({ x: jx, y: y + h + 0.3, z: jz, side, sx: dd + 0.15, sy: 1.1, sz: w + 0.15, color: ROOF_COLORS[Math.floor(r() * ROOF_COLORS.length)], ry: ry + Math.PI / 2 });
         } else {
           const w = 1.3 + r() * 0.6, h = 1.5 + (1 - d) * (c.tall ?? 0.4) * 12 * (0.5 + r());
-          towers.push({ x: jx, y, z: jz, sx: w, sy: h, sz: w, color });
-          caps.push({ x: jx, y: y + h, z: jz, sx: w * 0.6, sy: 0.35, sz: w * 0.6, color: '#8d99ae' });
+          towers.push({ x: jx, y, z: jz, side, sx: w, sy: h, sz: w, color });
+          caps.push({ x: jx, y: y + h, z: jz, side, sx: w * 0.6, sy: 0.35, sz: w * 0.6, color: '#8d99ae' });
         }
       }
     }
@@ -282,20 +284,20 @@ export function buildTrees(world) {
   const ground = world.nodes.filter((n) => !['router', 'repeater'].includes(n.type));
   const r = rand(5);
   const pines = [], rounds = [], trunks = [];
-  for (let x = -200; x < 200; x += 1.7) {
-    for (let z = -170; z < 240; z += 1.7) {
+  for (const side of [0, 1]) for (let x = -158; x < 158; x += 1.7) {
+    for (let z = -158; z < 158; z += 1.7) {
       const jx = x + (r() - 0.5) * 1.4, jz = z + (r() - 0.5) * 1.4;
-      if (Math.hypot(jx, jz) > 290) continue;
-      const h = heightAt(jx, jz);
-      if (h < 1 || h > 12.5 || icy(jx, jz) || r() > squeeze(jx, jz)) continue;
-      const forest = Math.sin(jx * 0.11 + 1.3) * Math.cos(jz * 0.13) + Math.sin(jx * 0.05 - jz * 0.07);
+      if (Math.hypot(jx, jz) > 157) continue;
+      const h = heightAt(jx, jz, side);
+      if (h < 1 || h > 12.5 || icy(jx, jz, side) || r() > squeeze(jx, jz)) continue;
+      const forest = Math.sin(jx * 0.11 + 1.3 + side * 2) * Math.cos(jz * 0.13) + Math.sin(jx * 0.05 - jz * 0.07);
       if (forest < 0.55 || r() < 0.35) continue;
-      if (world.cities.some((c) => Math.hypot(c.x - jx, c.z - jz) < c.r + 2.5)) continue;
-      if (!clearOf(segs, ground, jx, jz, 1.6, 3)) continue;
+      if (world.cities.some((c) => c.side === side && Math.hypot(c.x - jx, c.z - jz) < c.r + 2.5)) continue;
+      if (!clearOf(segs, ground, side, jx, jz, 1.6, 3)) continue;
       const s = 0.7 + r() * 0.6;
-      trunks.push({ x: jx, y: h - 0.2, z: jz, sx: 0.25 * s, sy: 0.8 * s, sz: 0.25 * s, color: '#8a5a3b' });
-      if (h > 5 || r() < 0.3) pines.push({ x: jx, y: h + 0.5 * s, z: jz, sx: s, sy: s * 1.4, sz: s, color: r() < 0.5 ? '#2f8f5b' : '#3a9f60' });
-      else rounds.push({ x: jx, y: h + 1.0 * s, z: jz, sx: s, sy: s, sz: s, color: r() < 0.5 ? '#5cb85c' : '#7bc96f' });
+      trunks.push({ x: jx, y: h - 0.2, z: jz, side, sx: 0.25 * s, sy: 0.8 * s, sz: 0.25 * s, color: '#8a5a3b' });
+      if (h > 5 || r() < 0.3) pines.push({ x: jx, y: h + 0.5 * s, z: jz, side, sx: s, sy: s * 1.4, sz: s, color: r() < 0.5 ? '#2f8f5b' : '#3a9f60' });
+      else rounds.push({ x: jx, y: h + 1.0 * s, z: jz, side, sx: s, sy: s, sz: s, color: r() < 0.5 ? '#5cb85c' : '#7bc96f' });
     }
   }
   const g = new THREE.Group();
@@ -315,12 +317,13 @@ export function buildLife(scene) {
     b.add(box(2.6, 0.6, 1.1, color, 0, -0.2, 0, 0.07), box(1, 0.7, 0.8, '#ffffff', -0.3, 0.4, 0, 0.06));
     return b;
   };
-  for (const [cx, cz, r, sp, color] of [[52, -20, 10, 0.12, '#e63946'], [60, 50, 14, -0.08, '#264653'], [-112, -40, 9, 0.1, '#f4a261'], [10, 66, 12, 0.07, '#2a9d8f']]) {
+  for (const [cx, cz, r, sp, color, side = 0] of [[52, -20, 10, 0.12, '#e63946'], [60, 50, 14, -0.08, '#264653'], [-112, -40, 9, 0.1, '#f4a261'], [10, 66, 12, 0.07, '#2a9d8f'],
+    [-84, 30, 10, 0.1, '#ffbe0b', 1], [70, 20, 12, -0.09, '#3a86ff', 1], [0, 64, 11, 0.08, '#e63946', 1]]) {
     const b = boat(color);
     scene.add(b);
     movers.push((t) => {
       const a = t * sp;
-      place(b, cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r, -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2));
+      place(b, cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r, -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2), side);
     });
   }
 
@@ -397,6 +400,12 @@ const routerTop = (() => {
   return t;
 })();
 
+function puckModel(r, color) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.6, 24), [toon(color), new THREE.MeshToonMaterial({ map: routerTop, gradientMap: gradient }), toon(color)]);
+  m.castShadow = true;
+  return outline(m, 0.06);
+}
+
 export function modelFor(n, layerColor) {
   const g = new THREE.Group();
   const s = n.size || 1;
@@ -458,6 +467,42 @@ export function modelFor(n, layerColor) {
       const m = new THREE.Mesh(geo, [side, top, side]);
       m.castShadow = true;
       g.add(outline(m, 0.08));
+      break;
+    }
+    case 'core': {
+      // a router building with the classic router puck on its roof
+      g.add(box(3.6, 2.6, 3.2, '#e8edf5', 0, -0.4));
+      g.add(box(3.8, 0.3, 3.4, layerColor, 0, 2.2, 0, 0.05));
+      for (let i = -1; i <= 1; i++) g.add(box(0.7, 0.5, 0.05, '#7cc6fe', i * 1.05, 0.9, 1.62, 0));
+      const puck = puckModel(1.2, layerColor);
+      puck.position.y = 2.95;
+      g.add(puck);
+      break;
+    }
+    case 'agg': {
+      g.add(box(1.8, 1.4, 1.4, '#e8edf5', 0, -0.3, 0, 0.06));
+      const puck = puckModel(0.75, layerColor);
+      puck.position.y = 1.45;
+      g.add(puck);
+      break;
+    }
+    case 'xhub': {
+      g.add(box(1.6, 1.2, 1.3, '#fff3e0', 0, -0.3, 0, 0.06));
+      g.add(gable(1.8, 0.7, 1.5, layerColor, 0.9));
+      g.add(cyl(0.08, 0.12, 3.2, '#adb5bd', 1.1, -0.2, 0, 6, 0.03));
+      g.add(box(0.25, 0.7, 0.1, '#ffffff', 1.1, 2.6, 0.12, 0.03));
+      break;
+    }
+    case 'ixp': {
+      // the internet exchange: a hall with a ring of flag poles for the networks that peer there
+      g.add(box(4.4, 2.2, 3, '#f8f9fa', 0, -0.4));
+      g.add(box(4.6, 0.3, 3.2, layerColor, 0, 1.8, 0, 0.05));
+      const flags = ['#e63946', '#ffbe0b', '#2a9d8f', '#8338ec', '#fb5607'];
+      flags.forEach((c, i) => {
+        const a = (i / flags.length) * Math.PI * 2;
+        g.add(cyl(0.05, 0.05, 2.4, '#6c757d', Math.cos(a) * 3.2, -0.2, Math.sin(a) * 2.6, 6, 0));
+        g.add(box(0.7, 0.45, 0.04, c, Math.cos(a) * 3.2 + 0.36, 1.75, Math.sin(a) * 2.6, 0.02));
+      });
       break;
     }
     case 'access': {
@@ -536,19 +581,18 @@ export function modelFor(n, layerColor) {
 
 // Height a node's model stands at.
 export function nodeY(world, n) {
-  if (n.type === 'router') return Math.max(0, heightAt(n.x, n.z)) + (n.tier === 'core' ? 12 : 8.5);
-  if (n.type === 'repeater') return heightAt(n.x, n.z);
-  return Math.max(0.4, heightAt(n.x, n.z));
+  if (n.type === 'repeater') return heightAt(n.x, n.z, n.side);
+  return Math.max(0.4, heightAt(n.x, n.z, n.side));
 }
 
 // ---------------------------------------------------------------- cables
 
-const LIFT = { backbone: 0.55, regional: 0.45, dci: 0.45, access: 0.3, submarine: 0.35 };
-const RADIUS = { backbone: 0.42, regional: 0.32, dci: 0.34, access: 0.18, submarine: 0.36, mpls: 0.2 };
+const LIFT = { backbone: 0.55, regional: 0.45, dci: 0.45, metro: 0.5, submarine: 0.35, ipcore: 0.55, agg: 0.45, access: 0.35, xhaul: 0.4 };
+const RADIUS = { backbone: 0.42, regional: 0.32, dci: 0.34, metro: 0.36, submarine: 0.36, ipcore: 0.4, agg: 0.32, access: 0.2, xhaul: 0.26 };
 
-function groundY(x, z) {
+function groundY(x, z, side) {
   let h = -Infinity;
-  for (const [dx, dz] of [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]]) h = Math.max(h, heightAt(x + dx, z + dz));
+  for (const [dx, dz] of [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]]) h = Math.max(h, heightAt(x + dx, z + dz, side));
   return h;
 }
 
@@ -563,51 +607,48 @@ const dash = (() => {
   return t;
 })();
 
-// A cable's centre line as a three.js curve. On the planet by default; given
-// `space` ({ cx, cz, k }) it is laid flat in open space around (cx, cz) instead,
-// with no terrain under it, for the drill-down view of one network.
+// A cable's centre line as a three.js curve. On the planet by default. Given `space`
+// it is laid out for the drill-down instead, with no terrain under it: flat around
+// (cx, cz) for a network on one side, or round an invisible planet ({ sphere: true })
+// for one that wraps from side to side.
 export function linkCurve(world, l, nodeYs, space = null) {
-  const P = space ? (x, y, z) => new THREE.Vector3(x - space.cx, y, z - space.cz) : (x, y, z) => sph(x, y, z);
-  if (l.layer === 'mpls') {
-    // an arc over the planet: straight on the map, raised in the middle
-    const a = world.byId[l.a], b = world.byId[l.b];
-    const ya = nodeYs[a.id], yb = nodeYs[b.id];
-    const len = Math.hypot(b.x - a.x, b.z - a.z);
-    const ym = Math.max(ya, yb) + 3 + len * 0.16;
-    const pts = [];
-    for (let i = 0, n = Math.max(12, Math.ceil(len / 2)); i <= n; i++) {
-      const t = i / n;
-      const y = (1 - t) * (1 - t) * ya + 2 * t * (1 - t) * ym + t * t * yb;
-      pts.push(P(a.x + (b.x - a.x) * t, y, a.z + (b.z - a.z) * t));
-    }
-    return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len };
+  const side = world.byId[l.a].side;
+  const len = linkLength(world, l);
+  let pts;
+  if (l.cross || space?.sphere) {
+    pts = linkDirs(world, l, 1.4).map((d) => {
+      const h = space ? 0.5 * space.k : heightDir(...d) + LIFT[l.layer];
+      return new THREE.Vector3(...d).multiplyScalar(PLANET_R + h);
+    });
+  } else {
+    pts = samplePath(linkPath(world, l), 1.4).map(([x, z]) => {
+      if (space) return new THREE.Vector3(x - space.cx, 0.5 * space.k, z - space.cz);
+      const h = groundY(x, z, side);
+      const y = h < 0 ? heightAt(x, z, side) + LIFT.submarine : h + LIFT[l.layer];
+      return sph(x, y, z, side);
+    });
   }
-  const path = linkPath(world, l);
-  const pts = samplePath(path, 1.4).map(([x, z]) => {
-    if (space) return P(x, 0.5 * space.k, z);
-    const h = groundY(x, z);
-    const y = h < 0 ? heightAt(x, z) + LIFT.submarine : h + LIFT[l.layer];
-    return sph(x, y, z);
-  });
-  return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len: pathLength(path) };
+  return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len };
 }
 
 export function buildCable(world, l, color, nodeYs, space = null) {
   const { curve, len } = linkCurve(world, l, nodeYs, space);
   const r = RADIUS[l.layer] * (space ? space.k : 1);
   const segs = Math.max(8, Math.ceil(len * 1.6));
-  const mat = l.layer === 'mpls'
+  // data-network links are dashed: packets, not glass
+  const dashed = LAYER[l.layer].data;
+  const mat = dashed
     ? new THREE.MeshToonMaterial({ color, gradientMap: gradient, alphaMap: dash.clone(), alphaTest: 0.5 })
     : new THREE.MeshToonMaterial({ color, gradientMap: gradient });
   if (mat.alphaMap) {
-    mat.alphaMap.repeat.set(Math.max(2, Math.round(len / 2.2)), 1);
+    mat.alphaMap.repeat.set(Math.max(2, Math.round(len / (1.6 * (space ? space.k : 1)))), 1);
     mat.alphaMap.needsUpdate = true;
   }
   const sides = space ? 12 : 6;   // fat cables in open space need rounder tubes
   const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, sides, false), mat);
   mesh.castShadow = l.layer !== 'submarine';
   const ink = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r + 0.11 * (space ? space.k : 1), sides, false),
-    l.layer === 'mpls' ? new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide, alphaMap: mat.alphaMap, alphaTest: 0.5 }) : inkMat.clone());
+    dashed ? new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide, alphaMap: mat.alphaMap, alphaTest: 0.5 }) : inkMat.clone());
   ink.raycast = () => {};
   mesh.add(ink);
   const table = curve.getSpacedPoints(Math.max(8, Math.ceil(len * 2)));

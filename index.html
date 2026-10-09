@@ -21,11 +21,15 @@
 
   <header class="title">
     <h1>Netlandia</h1>
-    <p>Six Ciena networks, one tiny country</p>
+    <p>Transport on one side, the data network on the other</p>
   </header>
 
   <nav id="panel" class="panel" aria-label="Networks">
-    <h2>Open a network</h2>
+    <div class="sides" role="group" aria-label="Side of the globe">
+      <button data-side="0" aria-pressed="true"><b>Side A</b><span>Transport</span></button>
+      <button data-side="1" aria-pressed="false"><b>Side B</b><span>Data network</span></button>
+    </div>
+    <h2 id="side-name"></h2>
     <ul id="majors"></ul>
     <div class="opts" role="group" aria-label="Display">
       <button data-opt="traffic" aria-pressed="true">Traffic</button>
@@ -53,7 +57,7 @@
     <ul class="card-links"></ul>
   </aside>
 
-  <p class="hint">Drag to spin the planet · Scroll or pinch to zoom · Click a network to open it</p>
+  <p class="hint">Drag to spin the planet · Scroll or pinch to zoom · Click a network to open it · Flip sides in the panel</p>
 </div>
 <!--/HUD-->
 <script type="module" src="js/main.js"></script>

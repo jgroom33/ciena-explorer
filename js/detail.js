@@ -4,19 +4,30 @@
 // (the submarine cables) reads as clearly as a compact one (the metro).
 import * as THREE from 'three';
 import { LAYER } from './world.js';
-import { modelFor, buildCable, routerPole } from './scene.js';
+import { modelFor, buildCable, routerPole, place, sph } from './scene.js';
 
-const DETAIL_SPEED = { dci: 16, backbone: 20, regional: 13, submarine: 14, mpls: 15, access: 8 };
+const DETAIL_SPEED = { dci: 16, backbone: 20, regional: 13, metro: 15, submarine: 14, ipcore: 18, agg: 13, access: 8, xhaul: 10 };
 
 export function buildDetail(world, part) {
   const scene = new THREE.Scene();
   const nodes = part.nodes.map((id) => world.byId[id]);
   const links = part.links.map((id) => world.links.find((l) => l.id === id));
 
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (const n of nodes) { x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x); z0 = Math.min(z0, n.z); z1 = Math.max(z1, n.z); }
-  const extent = Math.max(x1 - x0, z1 - z0, 30);
-  const space = { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, k: THREE.MathUtils.clamp(extent / 70, 1, 4) };
+  // A network on one side is laid flat; one that wraps between sides (the subsea
+  // cables) keeps its shape round an invisible planet instead.
+  const sphere = new Set(nodes.map((n) => n.side)).size > 1;
+  const box = new THREE.Box3();
+  for (const n of nodes) box.expandByPoint(sphere ? sph(n.x, 0, n.z, n.side) : new THREE.Vector3(n.x, 0, n.z));
+  const size = box.getSize(new THREE.Vector3());
+  const extent = Math.max(size.x, size.y, size.z, 30);
+  const mid = box.getCenter(new THREE.Vector3());
+  const space = { sphere, cx: mid.x, cz: mid.z, k: THREE.MathUtils.clamp(extent / 70, 1, 4) };
+  const center = sphere ? new THREE.Vector3(0, mid.y, 0) : new THREE.Vector3();
+  // the side of the network to look at it from
+  // (a wrap-round network is seen from high over the pole, so the whole loop of it shows)
+  const viewDir = sphere
+    ? new THREE.Vector3().setFromSphericalCoords(1, 0.5, Math.atan2(mid.x, mid.z))
+    : new THREE.Vector3().setFromSphericalCoords(1, 0.85, 0.3);
 
   // Sites sit on an invisible floor; routers float above the hubs that house them.
   const ys = {};
@@ -24,7 +35,9 @@ export function buildDetail(world, part) {
 
   scene.add(new THREE.HemisphereLight('#ffffff', '#8a9bb5', 1.7));
   const sun = new THREE.DirectionalLight('#fff4e0', 2.2);
-  sun.position.set(-extent * 0.5, extent * 1.2, extent * 0.6);
+  sun.position.copy(center).addScaledVector(viewDir, extent * 1.3).add(new THREE.Vector3(-extent * 0.4, extent * 0.5, 0));
+  sun.target.position.copy(center);
+  scene.add(sun.target);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 1, far: extent * 4 });
@@ -33,18 +46,21 @@ export function buildDetail(world, part) {
   scene.add(sun);
 
   // Nothing to stand on, but soft shadows underneath give the network some depth.
+  if (!sphere) {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(extent * 3, extent * 3), new THREE.ShadowMaterial({ opacity: 0.16 }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.7 * space.k;
   floor.receiveShadow = true;
   floor.raycast = () => {};
   scene.add(floor);
+  }
 
   const nodeObjs = {}, pickables = [];
   for (const n of nodes) {
     const g = modelFor(n, LAYER[n.layers[0]].color);
+    if (sphere) place(g, n.x, ys[n.id], n.z, 0, n.side);
+    else g.position.set(n.x - space.cx, ys[n.id], n.z - space.cz);
     g.scale.setScalar(space.k);
-    g.position.set(n.x - space.cx, ys[n.id], n.z - space.cz);
     g.traverse((o) => { o.userData.nodeId = n.id; });
     if (n.type === 'router' && ys[n.host] !== undefined) {
       g.add(routerPole(0, -0.4, (ys[n.host] + 3 * space.k - ys[n.id]) / space.k, 0, LAYER.mpls.color));
@@ -93,12 +109,14 @@ export function buildDetail(world, part) {
     for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
   }
 
-  // Selection ring, laid on the floor under the picked site.
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(3 * space.k, 0.28 * space.k, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-  ring.rotation.x = -Math.PI / 2;
+  // Selection ring, laid flat under the picked site (on whatever counts as flat there).
+  const ring = new THREE.Group();
+  const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(3 * space.k, 0.28 * space.k, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+  ringMesh.rotation.x = -Math.PI / 2;
+  ringMesh.raycast = () => {};
+  ring.add(ringMesh);
   ring.visible = false;
-  ring.raycast = () => {};
   scene.add(ring);
 
-  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, update, extent, space };
+  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir };
 }
