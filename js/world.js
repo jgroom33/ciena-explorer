@@ -548,6 +548,13 @@ export function buildWorld() {
     }
   }
 
+  // the sea along every cable, for the submarine region on the globe
+  seaBand = [];
+  for (const link of links) {
+    if (!link.sea) continue;
+    for (const d of linkDirs({ byId }, link, 2)) if (heightDir(...d) < -0.5) seaBand.push(d);
+  }
+
   for (const n of nodes) {
     n.gear = n.gear || gearFor(n);
     n.links = [];
@@ -558,7 +565,7 @@ export function buildWorld() {
     byId[l.b].links.push(l.id);
   });
 
-  return { nodes, links, byId, cities: CITIES, layers: LAYERS };
+  return { nodes, links, byId, cities: CITIES, layers: LAYERS, seaBand };
 }
 
 // Last dry spot walking from a town toward a point at sea, on the town's side.
@@ -660,8 +667,15 @@ export const MAJORS = [
 ];
 export const MAJOR = Object.fromEntries(MAJORS.map((m) => [m.id, m]));
 
+// The submarine network's region also follows the cables themselves: a band of sea
+// either side of every cable, all the way round the planet. buildWorld fills this in.
+export const BAND = 7;
+let seaBand = [];
+const bandCos = Math.cos(BAND / PLANET_R);
+
 // Which major's region a spot on a side's map falls in, if any: the one whose circle
-// it is deepest inside, so overlapping edges go to the closer centre.
+// it is deepest inside, so overlapping edges go to the closer centre; failing that,
+// the cable band.
 export function regionAt(x, z, side) {
   let best = null, bestD = 1;
   for (const m of MAJORS) {
@@ -671,7 +685,10 @@ export function regionAt(x, z, side) {
       if (d < bestD) { bestD = d; best = m.id; }
     }
   }
-  return best;
+  if (best) return best;
+  const d = flatToDir(x, z, side);
+  for (const p of seaBand) if (dot(d, p) > bandCos) return 'submarine';
+  return null;
 }
 
 // For each major: the link ids it owns and every node id that belongs in its own view.

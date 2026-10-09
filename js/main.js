@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import { buildWorld, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir, dirToFlat, MAJORS, MAJOR, majorParts, regionAt, SIDES } from './world.js';
+import { buildWorld, LAYER, ENDPOINT, heightAt, heightDir, PLANET_R, flatToDir, dirToFlat, linkDirs, MAJORS, MAJOR, majorParts, regionAt, SIDES, BAND } from './world.js';
 import {
-  buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, place, sph, frameAt,
+  buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, place, sph, frameAt, cableShip,
 } from './scene.js';
 import { buildDetail } from './detail.js';
 import { TOPICS, TechPlayer } from './tech.js';
@@ -94,6 +94,38 @@ const board = buildPlanet(scene);
 scene.add(buildTowns(world), buildTrees(world));
 const life = buildLife(scene);
 
+// Cable-laying ships working the subsea routes: one per cable, steaming slowly up
+// and down the open-sea stretch of its route, so the ocean is busy on both sides.
+const ships = [];
+for (const l of world.links.filter((x) => x.sea)) {
+  const route = linkDirs(world, l, 1).map((d) => new THREE.Vector3(...d));
+  // the longest stretch that is properly at sea
+  let best = [0, 0], run = 0, start = 0;
+  route.forEach((d, i) => {
+    if (heightDir(d.x, d.y, d.z) < -1.2) { if (!run) start = i; run++; if (run > best[1] - best[0]) best = [start, start + run]; } else run = 0;
+  });
+  if (best[1] - best[0] < 20) continue;
+  const ship = cableShip();
+  ship.scale.setScalar(0.9);
+  scene.add(ship);
+  ships.push({ ship, route: route.slice(best[0] + 3, best[1] - 3), s: Math.random() * 40, dir: 1 });
+}
+const _sU = new THREE.Vector3(), _sF = new THREE.Vector3(), _sR = new THREE.Vector3(), _sM = new THREE.Matrix4();
+function sailShips(t, dt) {
+  for (const sh of ships) {
+    sh.s += dt * 1.1 * sh.dir;
+    if (sh.s >= sh.route.length - 2) { sh.s = sh.route.length - 2; sh.dir = -1; }
+    if (sh.s <= 0) { sh.s = 0; sh.dir = 1; }
+    const i = Math.floor(sh.s), f = sh.s - i;
+    _sU.lerpVectors(sh.route[i], sh.route[i + 1], f).normalize();
+    _sF.subVectors(sh.route[i + 1], sh.route[i]).multiplyScalar(sh.dir).normalize();
+    _sR.crossVectors(_sU, _sF).normalize();
+    _sF.crossVectors(_sR, _sU).normalize();
+    sh.ship.position.copy(_sU).multiplyScalar(R + 0.15 + Math.sin(t * 1.6 + i) * 0.08);
+    sh.ship.quaternion.setFromRotationMatrix(_sM.makeBasis(_sF, _sU, _sR));
+  }
+}
+
 const nodeYs = {};
 for (const n of world.nodes) nodeYs[n.id] = nodeY(world, n);
 
@@ -136,6 +168,23 @@ const halos = {};
         // feather the edge
         if (Math.random() > 1.25 - d) continue;
         spots.push([x, z, cs]);
+      }
+    }
+    if (m.id === 'submarine') {
+      // ...plus the sea either side of every cable, so the glow runs right round the planet
+      const seen = new Set();
+      for (const d of world.seaBand) {
+        const u = new THREE.Vector3(...d), t = new THREE.Vector3(0, 1, 0).cross(u).normalize();
+        if (t.lengthSq() < 1e-6) continue;
+        const v = new THREE.Vector3().crossVectors(u, t).normalize();
+        for (let a = -BAND + 1.5; a <= BAND - 1.5; a += 2.4) for (let b = -1.2; b <= 1.2; b += 2.4) {
+          const q = u.clone().addScaledVector(t, a / R).addScaledVector(v, b / R).normalize();
+          const [x, z, cs] = dirToFlat(q.x, q.y, q.z);
+          const key = `${Math.round(x / 2)},${Math.round(z / 2)},${cs}`;
+          if (seen.has(key) || heightAt(x, z, cs) > -0.2 || Math.hypot(x, z) > 156) continue;
+          seen.add(key);
+          spots.push([x, z, cs]);
+        }
       }
     }
     const mat = new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0, depthWrite: false });
@@ -618,6 +667,7 @@ function frame(now) {
     if (!flight) listSide(sideInView());
     for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
     flyPlane(t);
+    sailShips(t, dt);
     tweenHalos(dt, t);
     for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
     for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;

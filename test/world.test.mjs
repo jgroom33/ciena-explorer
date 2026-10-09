@@ -164,6 +164,15 @@ test('the sites that define each network stand inside its region on the globe', 
   for (const [x, z] of [[58, 22], [-122, 16], [92, 6]]) assert.equal(regionAt(x, z, 0), 'submarine', `A ${x},${z}`);
   // ...and the submarine network wraps round to Packetland's landing coasts
   for (const [x, z] of [[-80, 14], [52, 56], [80, -22]]) assert.equal(regionAt(x, z, 1), 'submarine', `B ${x},${z}`);
+  // ...and is unbroken along each cable: every sea point of every cable is in it
+  const { linkDirs: dirs, heightDir: hd, dirToFlat: d2f } = await import('../js/world.js');
+  for (const l of world.links.filter((x) => x.sea)) {
+    for (const d of dirs(world, l, 3)) {
+      if (hd(...d) > -0.5) continue;
+      const [x, z, side] = d2f(...d);
+      assert.equal(regionAt(x, z, side), 'submarine', `${l.name} at ${x.toFixed(0)},${z.toFixed(0)} side ${side}`);
+    }
+  }
   for (const n of world.nodes.filter((x) => x.type === 'cls')) assert.equal(regionAt(n.x, n.z, n.side) === 'submarine' || n.side === 0 && n.x < 60, true, n.id);
   assert.deepEqual(bad, []);
 });

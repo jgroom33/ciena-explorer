@@ -65,6 +65,12 @@ Each network has its own address: `#submarine`, `#longhaul`, `#metro`, `#ipcore`
 `#aggregation` or `#xhaul`. A link can open straight into one, and a separate page
 can later take over that address.
 
+The submarine network opens as an undersea scene: the cables lie on the sandy sea
+floor with the repeaters along them, the landing stations stand on the shore above
+a translucent sea surface, and whales cruise just above the floor. On the globe,
+cable-laying ships work each subsea route, and the network's glow follows the
+cables all the way round the planet.
+
 ![the submarine network round the planet](docs/submarine.png)
 
 ## Explore the technology

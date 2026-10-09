@@ -309,6 +309,45 @@ export function buildTrees(world) {
   return g;
 }
 
+// A cable-laying ship: white hull, yellow deckhouse, the cable sheave over the stern.
+export function cableShip() {
+  const ship = new THREE.Group();
+  ship.add(box(5, 0.9, 1.8, '#f1faee', 0, -0.3, 0, 0.08), box(1.6, 1.2, 1.4, '#ffc300', 1.2, 0.6, 0, 0.07),
+    cyl(0.12, 0.12, 2.2, '#1d2a44', -1.4, 0.6, 0, 6, 0), box(0.2, 0.2, 1.8, '#1d2a44', -1.9, 2.6, 0, 0),
+    cyl(0.5, 0.5, 0.25, '#1d2a44', -2.6, 0.7, 0, 12, 0.04));
+  ship.children[4].rotation.x = Math.PI / 2;
+  return ship;
+}
+
+// A whale, nose along +x: body, flukes, two flippers, a pale belly.
+export function whale(scale = 1) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.1, 3.6, 4, 10), toon('#3d5a80'));
+  body.rotation.z = Math.PI / 2;
+  body.castShadow = true;
+  g.add(outline(body, 0.08));
+  const belly = new THREE.Mesh(new THREE.CapsuleGeometry(0.8, 3.2, 4, 10), toon('#c7d7e8'));
+  belly.rotation.z = Math.PI / 2;
+  belly.position.y = -0.5;
+  g.add(belly);
+  const tail = new THREE.Group();
+  tail.position.x = -2.9;
+  const fluke = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 3), toon('#3d5a80'));
+  fluke.position.x = -0.6;
+  tail.add(outline(fluke, 0.06));
+  g.add(tail);
+  for (const sgn of [-1, 1]) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.14, 0.7), toon('#3d5a80'));
+    fin.position.set(0.6, -0.5, sgn * 1.2);
+    fin.rotation.y = sgn * 0.5;
+    g.add(outline(fin, 0.05));
+  }
+  g.add(ball(0.17, '#1d2a44', 1.6, 0.4, 0.95, 0), ball(0.17, '#1d2a44', 1.6, 0.4, -0.95, 0));
+  g.scale.setScalar(scale);
+  g.userData.tail = tail;
+  return g;
+}
+
 // Little things that move: boats, wind turbines, clouds.
 export function buildLife(scene) {
   const movers = [];
@@ -328,9 +367,7 @@ export function buildLife(scene) {
   }
 
   // Cable ship parked over the Lumen City – Coherent Isle cable.
-  const ship = new THREE.Group();
-  ship.add(box(5, 0.9, 1.8, '#f1faee', 0, -0.3, 0, 0.08), box(1.6, 1.2, 1.4, '#ffc300', 1.2, 0.6, 0, 0.07),
-    cyl(0.12, 0.12, 2.2, '#1d2a44', -1.4, 0.6, 0, 6, 0), box(0.2, 0.2, 1.8, '#1d2a44', -1.9, 2.6, 0, 0));
+  const ship = cableShip();
   scene.add(ship);
   movers.push((t) => { place(ship, 56, Math.sin(t * 1.6) * 0.1, 30, 0.5); ship.rotateX(Math.sin(t * 1.3) * 0.03); });
 
