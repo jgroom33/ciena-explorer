@@ -153,8 +153,8 @@ test('the sites that define each network stand inside its region on the globe', 
   const own = {
     longhaul: (n) => n.id.startsWith('bb_'),
     metro: (n) => n.type === 'dc' && n.side === 0 && n.id !== 'dc_isla' || n.type === 'hub',
-    ipcore: (n) => n.type === 'core' && !n.id.startsWith('cr_c') || n.type === 'ixp',
-    aggregation: (n) => n.type === 'agg' || n.id.startsWith('cr_c') || n.id.startsWith('end_') && n.layers[0] === 'access',
+    ipcore: (n) => n.type === 'core' || n.type === 'ixp',
+    aggregation: (n) => n.type === 'agg' || n.id.startsWith('end_') && n.layers[0] === 'access',
     xhaul: (n) => n.type === 'xhub' || n.type === 'tower',
   };
   const bad = [];

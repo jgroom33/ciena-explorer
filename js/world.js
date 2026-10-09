@@ -624,7 +624,7 @@ export const MAJORS = [
     // three landing coasts of Packetland ([x, z, r, side]; side defaults to A)
     both: true,
     region: [[58, 22, 22], [92, 6, 22], [96, 30, 16], [112, 46, 18], [-122, 16, 18], [70, 70, 20], [-140, 30, 20],
-      [-80, 14, 16, 1], [46, 50, 14, 1], [80, -22, 16, 1], [110, 0, 18, 1], [-110, 24, 18, 1]],
+      [-80, 14, 16, 1], [46, 50, 11, 1], [80, -22, 16, 1], [110, 0, 18, 1], [-110, 24, 18, 1]],
     owns: (l) => l.layer === 'submarine',
   },
   {
@@ -645,15 +645,17 @@ export const MAJORS = [
   {
     id: 'ipcore', side: 1, name: 'IP/MPLS core', color: LAYER.ipcore.color, layers: ['ipcore'],
     blurb: 'Six core routers in a mesh, every one with three or more neighbours: a redundant pair in Coreburg and one in each corner of Packetland, peering at the Gateway Bay internet exchange and serving the cloud and 5G core data centers.',
-    place: 'Gateway Bay, Northport, Edgewater and Framefield',
-    region: [[-52, 12, 16], [-12, -34, 11], [46, -20, 14], [32, 30, 10]],
+    place: 'The Coreburg core pair and the four corner towns',
+    // the core sits at the centre of Coreburg (a small circle that beats the metro's)
+    // and at each corner of the country
+    region: [[0, 0, 10.5], [-52, 12, 16], [-12, -34, 11], [46, -20, 14], [32, 30, 10]],
     owns: (l) => l.layer === 'ipcore',
   },
   {
     id: 'aggregation', side: 1, name: 'Metro aggregation', color: LAYER.agg.color, layers: ['agg', 'access'],
     area: { ...COREBURG, r: 20 },
     blurb: 'A segment-routed aggregation ring round Coreburg, homed on both core routers, with business Ethernet rings looping past banks, offices, a hospital and a school between its routers.',
-    place: 'Downtown Coreburg',
+    place: 'The ring of downtown Coreburg round the core',
     region: [[0, 2, 24]],
     owns: (l) => l.layer === 'agg' || l.layer === 'access',
   },
@@ -673,22 +675,23 @@ export const BAND = 7;
 let seaBand = [];
 const bandCos = Math.cos(BAND / PLANET_R);
 
-// Which major's region a spot on a side's map falls in, if any: the one whose circle
-// it is deepest inside, so overlapping edges go to the closer centre; failing that,
-// the cable band.
+// Which major's region a spot on a side's map falls in, if any: the smallest circle
+// it is inside (so a network nested in another's area, like the core pair in the
+// middle of Coreburg's metro ring, wins there); failing that, the cable band.
 export function regionAt(x, z, side) {
-  let best = null, bestD = 1;
+  let best = null, bestR = Infinity;
   for (const m of MAJORS) {
     for (const [cx, cz, r, cs = m.side] of m.region) {
-      if (cs !== side) continue;
-      const d = Math.hypot(x - cx, z - cz) / r;
-      if (d < bestD) { bestD = d; best = m.id; }
+      if (cs !== side || r >= bestR) continue;
+      if (Math.hypot(x - cx, z - cz) < r) { bestR = r; best = m.id; }
     }
   }
-  if (best) return best;
-  const d = flatToDir(x, z, side);
-  for (const p of seaBand) if (dot(d, p) > bandCos) return 'submarine';
-  return null;
+  // at sea, the cable band wins over any circle that happens to reach the water
+  if (!best || heightAt(x, z, side) < -0.5) {
+    const d = flatToDir(x, z, side);
+    for (const p of seaBand) if (dot(d, p) > bandCos) return 'submarine';
+  }
+  return best;
 }
 
 // For each major: the link ids it owns and every node id that belongs in its own view.
