@@ -155,7 +155,7 @@ export const LAYERS = [
   {
     id: 'metro', side: 0, name: 'Metro optical ring', short: 'Metro optical', color: '#14b8a6',
     blurb: 'A packet-optical ring joining the four Capitalia metro hubs.',
-    gear: 'Ciena 6500 Packet-Optical with WaveLogic 5 Nano',
+    gear: 'Ciena RLS with WaveLogic 5 Nano',
   },
   {
     id: 'dci', side: 0, name: 'Data center interconnect', short: 'DCI', color: '#9b5de5',
@@ -165,7 +165,7 @@ export const LAYERS = [
   {
     id: 'regional', side: 0, name: 'Regional transport', short: 'Regional', color: '#ff8c1a',
     blurb: 'Rings through the western towns, each homed on two ROADMs.',
-    gear: 'Ciena 6500 Packet-Optical',
+    gear: 'Ciena RLS',
   },
   {
     id: 'ipcore', side: 1, data: true, name: 'IP/MPLS core', short: 'IP core', color: '#2f80ed',
@@ -585,8 +585,8 @@ function gearFor(n) {
   switch (n.type) {
     case 'dc': return n.side ? 'Data center gateway on Ciena 8100 Coherent Routers' : 'Ciena Waveserver 5 with WaveLogic 6 Extreme';
     case 'pop': return 'Ciena RLS ROADM with WaveLogic 6 transponders';
-    case 'hub': return 'Ciena 6500 Packet-Optical and RLS';
-    case 'regional': return 'Ciena 6500 Packet-Optical';
+    case 'hub': return 'Ciena RLS ROADM, metro degree';
+    case 'regional': return 'Ciena RLS ROADM, two-degree';
     case 'ila': return 'Ciena RLS line amplifier';
     case 'cls': return 'Ciena GeoMesh Extreme submarine line terminal';
     case 'repeater': return 'Submarine optical repeater';

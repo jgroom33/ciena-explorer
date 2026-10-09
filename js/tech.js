@@ -101,7 +101,7 @@ export const TOPICS = {
 
   metro: [
     {
-      id: 'ring', name: 'Fixed ROADM ring', tag: 'Ciena 6500 with WaveLogic 5 Nano',
+      id: 'ring', name: 'Fixed ROADM ring', tag: 'Ciena RLS with WaveLogic 5 Nano',
       summary: 'Two-degree ROADMs on a ring: simpler and cheaper than the long-haul mesh.',
       steps: [
         {
@@ -115,7 +115,7 @@ export const TOPICS = {
       ],
     },
     {
-      id: 'protect', name: 'Ring protection', tag: 'Ciena 6500 optical protection',
+      id: 'protect', name: 'Ring protection', tag: 'Ciena RLS optical protection',
       summary: 'Every hub can reach every other in two directions.',
       steps: [
         {

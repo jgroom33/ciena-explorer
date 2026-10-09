@@ -37,7 +37,7 @@ entry in the panel, opens it.
 |---|---|---|---|
 | A | Submarine network | 4 cables, 7 landing stations, 61 repeaters; 3 cables cross to side B | GeoMesh Extreme |
 | A | Long-haul RLS mesh | 8 ROADMs, each with 3+ routes, 21 amplifier huts, landing on 3 Capitalia hubs | RLS with WaveLogic 6 |
-| A | Capitalia metro optical | 4 metro hubs on a packet-optical ring, 4 data centers on a DCI ring | 6500, Waveserver |
+| A | Capitalia metro optical | 4 metro hubs on a packet-optical ring, 4 data centers on a DCI ring | RLS, Waveserver |
 | B | IP/MPLS core | 6 core routers in a mesh, an internet exchange, cloud and 5G core data centers | 8100 Coherent Routers |
 | B | Metro aggregation | a segment-routed ring round Coreburg on both core routers, 6 business customers on rings | 5170, 3900 series |
 | B | 5G mobile xhaul | 5 pre-aggregation hubs and 7 cell sites on a ring, uplinked into the core at 2 points | 5164, 5166 |
