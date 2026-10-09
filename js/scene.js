@@ -251,7 +251,7 @@ export function buildTowns(world) {
   const towers = [], roofs = [], caps = [];
   for (const c of world.cities) {
     // the far side of the planet squeezes the map sideways, so space lots out there
-    const step = (c.town ? 1.9 : 2.3) / squeeze(c.x, c.z);
+    const step = (c.town ? 1.9 : c.dense ? 1.85 : 2.3) / squeeze(c.x, c.z);
     for (let x = c.x - c.r; x <= c.x + c.r; x += step) {
       for (let z = c.z - c.r; z <= c.z + c.r; z += step) {
         const d = Math.hypot(x - c.x, z - c.z) / c.r;
@@ -373,7 +373,7 @@ export function buildLife(scene) {
   }
   scene.add(clouds);
   movers.push((t, dt) => { clouds.rotation.y += dt * 0.012; });
-  return { movers, clouds };
+  return { movers, clouds, cloudMat };
 }
 
 // ---------------------------------------------------------------- equipment models
@@ -410,6 +410,13 @@ export function modelFor(n, layerColor) {
       }
       g.add(box(1.6, 1.1, 1.2, '#fca311', 4.3 * s, -0.3, 1.2 * s, 0.05));
       if (s > 1.2) g.add(box(7 * s, 2.4, 3.4, '#eef2f7', 0, -0.4, 4.6 * s, 0.08), box(7.1 * s, 0.35, 3.5, layerColor, 0, 1.6, 4.6 * s, 0.05));
+      break;
+    }
+    case 'hub': {
+      g.add(box(4.6, 4.2, 3.6, '#e8edf5', 0, -0.4));
+      g.add(box(4.8, 0.4, 3.8, layerColor, 0, 3.8, 0, 0.05));
+      for (let i = -1; i <= 1; i++) for (let k = 0; k < 2; k++) g.add(box(0.8, 0.6, 0.05, '#7cc6fe', i * 1.3, 0.8 + k * 1.4, 1.82, 0));
+      g.add(cyl(0.6, 0.6, 0.12, '#1d2a44', 1.2, 4.2, -0.6, 12, 0));
       break;
     }
     case 'pop': {

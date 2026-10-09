@@ -28,7 +28,7 @@ const rig = new THREE.PerspectiveCamera(38, 1, 1, 3000);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3000);
 const dirOf = (x, z) => new THREE.Vector3(...flatToDir(x, z));
 // Open over the home country, a little west so the layer panel doesn't hide Westmoor.
-const HOME = { dir: dirOf(-14, 10), dist: R + 250 };
+const HOME = { dir: dirOf(-32, 8), dist: R + 245 };
 rig.position.copy(HOME.dir).multiplyScalar(HOME.dist);
 
 const controls = new OrbitControls(rig, canvas);
@@ -61,6 +61,9 @@ function aimCamera() {
   // keep the sun and sky light over whatever is in view, so it's always daytime
   sun.position.copy(_d).multiplyScalar(300).addScaledVector(_n, 120).addScaledVector(_side.crossVectors(_n, _d), -140);
   hemi.position.copy(_d);
+  // clouds would sit in your face when zoomed in, so they thin out as you come down
+  life.cloudMat.opacity = 0.92 * THREE.MathUtils.smoothstep(h, 70, 150);
+  life.clouds.visible = opts.clouds && life.cloudMat.opacity > 0.02;
 }
 const _side = new THREE.Vector3();
 
@@ -235,8 +238,8 @@ function showAll() {
 // ---------------------------------------------------------------- HUD
 
 const TYPE_LABEL = {
-  dc: 'Data center', pop: 'Backbone point of presence', regional: 'Regional ring hut', ila: 'In-line amplifier hut',
-  cls: 'Cable landing station', repeater: 'Undersea repeater', edge: 'Cable leaves the map', router: 'MPLS router',
+  dc: 'Data center', pop: 'RLS ROADM site', hub: 'Metro hub', regional: 'Regional ring hut', ila: 'RLS amplifier hut',
+  cls: 'Cable landing station', repeater: 'Undersea repeater', router: 'MPLS router',
   access: 'Access node', ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
 };
 
@@ -245,12 +248,12 @@ function layerStats(id) {
   const ls = world.links.filter((l) => l.layer === id);
   const c = (t) => ns.filter((n) => n.type === t).length;
   switch (id) {
-    case 'dci': return `${c('dc')} campuses · ${ls.length} spans`;
+    case 'dci': return `${c('dc')} campuses on a metro ring`;
     case 'regional': return `3 rings · ${c('regional')} huts`;
-    case 'backbone': return `${c('pop')} PoPs · ${c('ila')} amp huts`;
+    case 'backbone': return `${ns.filter((n) => n.id.startsWith('bb_')).length} ROADMs · ${c('ila')} amp huts`;
     case 'submarine': return `${ls.length} cables · ${c('repeater')} repeaters`;
-    case 'mpls': return `${c('router')} routers · ${ls.length} paths`;
-    case 'access': return `${ns.length - c('access')} customer sites`;
+    case 'mpls': return `${c('router')} routers · full mesh`;
+    case 'access': return `${ns.filter((n) => n.id.startsWith('end_')).length} customers on rings`;
   }
   return '';
 }
@@ -284,7 +287,6 @@ for (const b of document.querySelectorAll('[data-opt]')) {
   b.addEventListener('click', () => {
     opts[b.dataset.opt] = !opts[b.dataset.opt];
     b.setAttribute('aria-pressed', String(opts[b.dataset.opt]));
-    life.clouds.visible = opts.clouds;
     for (const id in packets) packets[id].mesh.visible = opts.traffic;
   });
 }

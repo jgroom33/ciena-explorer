@@ -7,9 +7,7 @@ is, what equipment it runs and what it connects to. Packets run along every link
 
 ![overview](docs/overview.png)
 
-| Zoomed in, the horizon curves away | Submarine cables to Farland, over the planet's edge |
-|---|---|
-| ![](docs/closeup.png) | ![](docs/submarine.png) |
+![Submarine cables to Farland, over the planet's edge](docs/submarine.png)
 
 ![the far side](docs/farside.png)
 
@@ -26,16 +24,32 @@ Zoomed out you look straight down at the whole globe; as you zoom in the camera
 tilts toward the horizon, so the ground curves away in front of you. The sun follows
 the view, so whatever side you are looking at is in daylight.
 
+## How the country is laid out
+
+The networks sit in their own parts of the map so they don't pile up on each other:
+
+- **West: regional rings.** Two rings through the small western towns, each starting on
+  one backbone ROADM and ending on a different one, so no town hangs off a single hub.
+- **Middle: the countrywide RLS mesh.** Eight ROADM towns in a triangulated mesh, every
+  site with three or more routes out and amplifier huts along each span.
+- **East: Capitalia.** The skyline, four data centers on a DCI ring around downtown, and
+  four metro hubs where the mesh lands, joined by a full MPLS mesh in the sky. Access
+  rings loop between the skyscrapers from one hub to the next.
+
+| The RLS mesh on its own | Downtown Capitalia |
+|---|---|
+| ![](docs/rls-mesh.png) | ![](docs/closeup.png) |
+
 ## The six networks
 
 | layer | colour | what's on the map | example Ciena gear |
 |---|---|---|---|
-| Data center interconnect | purple | 5 home DC campuses plus Farland's cloud region, reached over the subsea cables | Waveserver 5, WaveLogic 6 Extreme |
-| Regional transport | orange | 3 protected rings (Capitalia, Portsea, Isla Verde) with ring huts in each town | 6500 Packet-Optical |
-| Countrywide backbone | red | 7 ROADM PoPs in a mesh, with in-line amplifier huts along the long spans | 6500 / RLS line system |
+| Data center interconnect | purple | 4 Capitalia campuses on a ring around downtown, plus Isla Verde and Farland over the subsea cables | Waveserver 5, WaveLogic 6 Extreme |
+| Regional transport | orange | 2 dual-homed rings in the west and the Isla Verde ring | 6500 Packet-Optical |
+| Countrywide RLS mesh | red | 8 ROADMs, each with 3+ routes, 24 amplifier huts, landing on 3 Capitalia hubs | RLS with WaveLogic 6 |
 | Submarine cable | yellow | 4 cables on the sea floor, landing stations and repeaters; two cross to Farland on the far side of the planet | GeoMesh Extreme |
-| MPLS transport | blue | 15 core and aggregation routers floating above their sites, LSPs as dashed arcs in the sky | 8100 Coherent Routers, 5100 series |
-| Access network | pink | 48 customer sites — banks, cell towers, offices, hospitals, schools, factories, hotels — on access nodes per town | 3900 / 5100 series NIDs and routers |
+| MPLS transport | blue | 4 Capitalia hub routers in a full mesh, plus a path to Isla Verde, drawn as arcs in the sky | 8100 Coherent Routers, 5100 series |
+| Access network | pink | 16 banks, offices, hospitals, schools and cell towers on rings that run hub to hub, never on a spur | 3900 / 5100 series NIDs and routers |
 
 The product names are illustrative placements, not a real network design.
 
@@ -70,7 +84,7 @@ inlined, so it can be shared as one file.
 | `js/scene.js` | three.js: the planet, sea and atmosphere, towns and trees (instanced), equipment models, cables, boats, wind farm, clouds |
 | `js/main.js` | planet camera and controls, layer state, packets, labels, picking, info card, tour |
 | `css/net.css` | the HUD |
-| `test/world.test.mjs` | data checks: links resolve, equipment and terrestrial fibre stay on dry land, subsea cables stay at sea, the projection round-trips |
+| `test/world.test.mjs` | data checks: links resolve, gear and fibre stay on land, subsea cables stay at sea, no two cables run alongside each other, every ROADM has 3+ routes, no customer is on a spur, each network keeps to its zone |
 | `build.mjs` | bundles everything into `dist/netlandia.html`, and fails if two modules declare the same top-level name |
 | `vendor/` | three.js r160 and OrbitControls (MIT) |
 
