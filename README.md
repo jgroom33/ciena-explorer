@@ -12,10 +12,12 @@ site can be clicked for its equipment and connections. Packets run along every l
 
 ## The two sides
 
-On the globe, transport is drawn as **solid fibre** and the data network as
-**dashed packet links**. Three subsea cables wrap round the planet from Netlandia
-to Packetland's landing stations, which is where the data network meets the
-transport under it.
+The globe is a toy world, not a diagram: nothing is wired up on it. The equipment
+stands in the landscape as landmarks (a data center campus, a landing station on
+the beach, amplifier huts up the mountain road, cell towers on the hills), and each
+network is a **region** of its country. Hover a region and the ground there tints
+in that network's colour and its landmarks lift; click it to open the network.
+An airliner circles the planet between the two countries.
 
 **Side A, Netlandia (transport)** is laid out in three bands so the networks don't
 pile up: regional rings through the western towns, the countrywide RLS mesh across
@@ -27,8 +29,8 @@ the city, and the 5G xhaul ring out in the countryside.
 
 ## The six major networks
 
-Only these are clickable on the globe. Hovering any cable or site of one, or for
-the two city networks anywhere over downtown, lights it up; clicking it, or its
+Each is a region of its country on the globe (the harbour and the strait, the
+heartland, the capital, the countryside); clicking that region, or the network's
 entry in the panel, opens it.
 
 | side | network | what's in it | example Ciena gear |
@@ -85,12 +87,12 @@ inlined, so it can be shared as one file.
 
 | file | what it does |
 |---|---|
-| `js/world.js` | pure data: the two sides and their projections onto the planet, terrain, towns, every node and link, generated customers, amplifiers and repeaters, the six major networks and what each owns |
+| `js/world.js` | pure data: the two sides and their projections onto the planet, terrain, towns, every node and link, generated customers, amplifiers and repeaters, the six major networks, the region each covers on the globe and the links each owns |
 | `js/scene.js` | three.js: the planet, sea and atmosphere, towns and trees (instanced), equipment models, solid and dashed cables, boats, wind farm, clouds |
 | `js/detail.js` | a network on its own: laid flat, or round an invisible planet, with its own lights and traffic |
-| `js/main.js` | globe camera and side switch, the clickable networks, switching views, labels, picking, the site card |
+| `js/main.js` | globe camera and side switch, the networks as clickable regions with their halos, the airliner, switching views, labels, picking, the site card |
 | `css/net.css` | the HUD |
-| `test/world.test.mjs` | data checks: links resolve, transport on side A and data on side B, gear and fibre on land, subsea cables at sea, no two cables run alongside each other, every ROADM and core router has 3+ routes, no customer or cell site on a spur, the six networks own their own links |
+| `test/world.test.mjs` | data checks: links resolve, transport on side A and data on side B, gear and fibre on land, subsea cables at sea, no two cables run alongside each other, every ROADM and core router has 3+ routes, no customer or cell site on a spur, the six networks own their own links, each network's sites stand inside its region |
 | `build.mjs` | bundles everything into `dist/netlandia.html`, and fails if two modules declare the same top-level name |
 | `vendor/` | three.js r160 and OrbitControls (MIT) |
 

@@ -1,19 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import { buildWorld, LAYERS, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir, dirToFlat, MAJORS, MAJOR, majorParts, SIDES } from './world.js';
+import { buildWorld, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir, dirToFlat, MAJORS, MAJOR, majorParts, regionAt, SIDES } from './world.js';
 import {
-  buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, buildCable, routerPole, place, sph,
+  buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, place, sph, frameAt,
 } from './scene.js';
 import { buildDetail } from './detail.js';
 
 const world = buildWorld();
 const parts = majorParts(world);
-// which major network (if any) a link or site belongs to on the globe
-const majorOfLink = {}, majorOfNode = {};
-for (const m of MAJORS) {
-  for (const id of parts[m.id].links) majorOfLink[id] = m.id;
-  for (const id of parts[m.id].nodes) majorOfNode[id] ??= m.id;
-}
+// which major network a landmark belongs to on the globe: the region it stands in,
+// else the first network that owns it
+const majorOfNode = {};
+for (const m of MAJORS) for (const id of parts[m.id].nodes) majorOfNode[id] ??= m.id;
+for (const n of world.nodes) majorOfNode[n.id] = regionAt(n.x, n.z, n.side) ?? majorOfNode[n.id];
 const $ = (s) => document.querySelector(s);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -94,19 +93,18 @@ const board = buildPlanet(scene);
 scene.add(buildTowns(world), buildTrees(world));
 const life = buildLife(scene);
 
-const layerGroups = Object.fromEntries(LAYERS.map((l) => [l.id, new THREE.Group()]));
-for (const g of Object.values(layerGroups)) scene.add(g);
-
 const nodeYs = {};
 for (const n of world.nodes) nodeYs[n.id] = nodeY(world, n);
 
-// Each node is drawn once, on its first layer, and is shown while any of its layers is.
+// The equipment stands in the landscape as landmarks: a data center campus, a
+// landing station on the beach, amplifier huts up the mountain road, cell towers
+// on the hills. Nothing is wired up on the globe; repeaters stay under the sea.
 const nodeObjs = {};
 const pickables = [];
 const blinkers = [], puffs = [];
 for (const n of world.nodes) {
-  const home = n.layers[0];
-  const g = modelFor(n, LAYER[home].color);
+  if (n.type === 'repeater') continue;
+  const g = modelFor(n, LAYER[n.layers[0]].color);
   place(g, n.x, nodeYs[n.id], n.z, 0, n.side);
   g.userData.node = n;
   g.traverse((o) => {
@@ -119,64 +117,81 @@ for (const n of world.nodes) {
   pickables.push(g);
 }
 
-const linkObjs = {};
-for (const l of world.links) {
-  const c = buildCable(world, l, LAYER[l.layer].color, nodeYs);
-  c.mesh.userData.linkId = l.id;
-  layerGroups[l.layer].add(c.mesh);
-  linkObjs[l.id] = c;
-}
+// ---------------------------------------------------------------- the networks as regions
 
-// Traffic: little glowing packets running both ways along every link.
-const SPEED = { dci: 16, backbone: 20, regional: 13, metro: 15, submarine: 14, ipcore: 18, agg: 13, access: 8, xhaul: 10 };
-const packets = {};
-for (const layer of LAYERS) {
-  const runs = [];
-  for (const l of world.links.filter((x) => x.layer === layer.id)) {
-    const n = Math.max(1, Math.round(linkObjs[l.id].len / (layer.id === 'access' ? 9 : 14)));
-    for (let k = 0; k < n; k++) runs.push({ link: linkObjs[l.id], phase: (k + Math.random() * 0.5) / n, dir: k % 2 ? -1 : 1 });
-  }
-  const r = layer.id === 'access' ? 0.32 : 0.48;
-  const col = new THREE.Color(layer.color).lerp(new THREE.Color('#ffffff'), 0.45);
-  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: col }), runs.length);
-  mesh.raycast = () => {};
-  layerGroups[layer.id].add(mesh);
-  packets[layer.id] = { mesh, runs };
-}
-const _pm = new THREE.Matrix4(), _v = new THREE.Vector3();
-function movePackets(t) {
-  for (const id in packets) {
-    const { mesh, runs } = packets[id];
-    if (!mesh.parent.visible) continue;
-    runs.forEach((p, i) => {
-      const tab = p.link.table;
-      let u = (p.phase + (t * SPEED[id]) / p.link.len) % 1;
-      if (p.dir < 0) u = 1 - u;
-      const f = u * (tab.length - 1), k = Math.floor(f);
-      _v.copy(tab[k]).lerp(tab[Math.min(k + 1, tab.length - 1)], f - k);
-      mesh.setMatrixAt(i, _pm.makeTranslation(_v.x, _v.y, _v.z));
+// Each network is a region of its country. Hovering it tints the ground there and
+// lifts its landmarks a touch; nothing else on the globe changes.
+const halos = {};
+{
+  const hex = new THREE.CircleGeometry(1.7, 6);   // overlapping, so the tint reads as a wash, not dots
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qx = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  const one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+  for (const m of MAJORS) {
+    const spots = [];
+    for (const [cx, cz, r] of m.region) {
+      for (let x = cx - r; x <= cx + r; x += 1.9) for (let z = cz - r; z <= cz + r; z += 1.9) {
+        const d = Math.hypot(x - cx, z - cz) / r;
+        if (d > 1 || regionAt(x, z, m.side) !== m.id) continue;
+        // feather the edge
+        if (Math.random() > 1.25 - d) continue;
+        spots.push([x, z]);
+      }
+    }
+    const mat = new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0, depthWrite: false });
+    const mesh = new THREE.InstancedMesh(hex, mat, spots.length);
+    spots.forEach(([x, z], i) => {
+      const h = Math.max(0.05, heightAt(x, z, m.side)) + 0.25;
+      mesh.setMatrixAt(i, m4.compose(sph(x, h, z, m.side, p), frameAt(x, z, m.side, q).multiply(qx), one));
     });
-    mesh.instanceMatrix.needsUpdate = true;
+    mesh.renderOrder = 5;
+    mesh.raycast = () => {};
+    scene.add(mesh);
+    halos[m.id] = { mesh, mat, target: 0 };
   }
 }
+const landmarksOf = Object.fromEntries(MAJORS.map((m) => [m.id, parts[m.id].nodes.filter((id) => nodeObjs[id] && majorOfNode[id] === m.id)]));
 
-// ---------------------------------------------------------------- the three majors on the globe
-
-// Hovering any part of a major lights up all of it and dims everything else.
 let lit = null;
 function emphasise(majorId) {
   if (majorId === lit) return;
+  if (lit) for (const id of landmarksOf[lit]) nodeObjs[id].scale.setScalar(1);
   lit = majorId;
-  for (const l of world.links) {
-    const o = linkObjs[l.id];
-    const dim = majorId && majorOfLink[l.id] !== majorId;
-    o.mat.transparent = !!dim;
-    o.mat.opacity = dim ? 0.18 : 1;
-    o.mat.depthWrite = !dim;
-    o.ink.visible = !dim;
-    o.mat.needsUpdate = true;
-  }
+  for (const id in halos) halos[id].target = id === majorId ? 0.34 : 0;
   for (const b of document.querySelectorAll('[data-major]')) b.classList.toggle('lit', b.dataset.major === majorId);
+}
+function tweenHalos(dt, t) {
+  for (const id in halos) {
+    const h = halos[id];
+    h.mat.opacity += (h.target - h.mat.opacity) * Math.min(1, dt * 9);
+    h.mesh.visible = h.mat.opacity > 0.01;
+  }
+  if (lit) {
+    const k = 1 + 0.08 * (0.5 + 0.5 * Math.sin(t * 5));
+    for (const id of landmarksOf[lit]) nodeObjs[id].scale.setScalar(k);
+  }
+}
+
+// A little airliner on a great circle through both countries.
+const plane = new THREE.Group();
+{
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 3, 4, 8), new THREE.MeshToonMaterial({ color: '#ffffff' }));
+  body.rotation.z = Math.PI / 2;
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 4.2), new THREE.MeshToonMaterial({ color: '#e63946' }));
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.1), new THREE.MeshToonMaterial({ color: '#e63946' }));
+  tail.position.set(-1.6, 0.5, 0);
+  plane.add(body, wing, tail);
+  plane.traverse((o) => { o.castShadow = true; });
+  scene.add(plane);
+}
+const _pp = new THREE.Vector3(), _pt = new THREE.Vector3(), _pu = new THREE.Vector3();
+function flyPlane(t) {
+  const a = t * 0.07;
+  // a circle tilted so it passes over both capitals and well clear of the poles
+  _pp.set(Math.cos(a), Math.sin(a) * 0.35, Math.sin(a) * 0.94).normalize();
+  _pt.set(-Math.sin(a), Math.cos(a) * 0.35, Math.cos(a) * 0.94).normalize();
+  plane.position.copy(_pp).multiplyScalar(R + 24);
+  _pu.copy(_pp);
+  plane.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(_pt, _pu, new THREE.Vector3().crossVectors(_pt, _pu)));
 }
 
 // ---------------------------------------------------------------- camera moves
@@ -262,7 +277,6 @@ for (const b of document.querySelectorAll('[data-opt]')) {
   b.addEventListener('click', () => {
     opts[b.dataset.opt] = !opts[b.dataset.opt];
     b.setAttribute('aria-pressed', String(opts[b.dataset.opt]));
-    for (const id in packets) packets[id].mesh.visible = opts.traffic;
   });
 }
 
@@ -410,14 +424,6 @@ for (const c of world.cities) {
   labelLayer.append(el);
   labels.push({ el, pos: sph(c.x, Math.max(0, heightAt(c.x, c.z, c.side)) + (c.town ? 4 : 9), c.z, c.side), town: c.town });
 }
-for (const n of world.nodes.filter((x) => x.type === 'dc' || (x.type === 'cls' && x.id.endsWith('far')))) {
-  const el = document.createElement('div');
-  el.className = 'lbl tag';
-  el.style.setProperty('--c', LAYER[n.layers[0]].color);
-  el.textContent = n.name;
-  labelLayer.append(el);
-  labels.push({ el, pos: sph(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z, n.side), node: n.id, tag: true });
-}
 const tip = document.createElement('div');
 tip.className = 'lbl tip';
 tip.hidden = true;
@@ -432,7 +438,6 @@ function placeLabels() {
   for (const L of labels) {
     let vis = opts.labels && facing(L.pos);
     if (L.town) vis &&= hh < 150;
-    if (L.tag) vis &&= hh < 140;
     if (vis) {
       _lp.copy(L.pos).project(camera);
       vis = _lp.z < 1 && Math.abs(_lp.x) < 1.1 && Math.abs(_lp.y) < 1.1;
@@ -450,44 +455,19 @@ const planetBall = new THREE.Sphere(new THREE.Vector3(), R);
 const _hit = new THREE.Vector3();
 const toScreen = (v, cam, r) => { _lp.copy(v).project(cam); return [((_lp.x + 1) / 2) * r.width, ((1 - _lp.y) / 2) * r.height, _lp.z]; };
 
-// On the globe a click or hover resolves to one of the three majors (or nothing):
-// a site or cable that belongs to it, a near miss on one (cables are thin from up
-// here, and fingers are fat), or for the metro, anywhere over downtown Capitalia.
+// On the globe a click or hover resolves to a network by *where* it lands: the
+// region of the country under the pointer, or a landmark standing in one.
 function pickMajor(ev) {
   const r = canvas.getBoundingClientRect();
-  const px = ev.clientX - r.left, py = ev.clientY - r.top;
-  ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
   for (const hit of ray.intersectObjects(pickables, true)) {
     const id = hit.object.userData.nodeId;
     if (id && majorOfNode[id] && facing(nodeObjs[id].position)) return majorOfNode[id];
   }
-  const reach = ev.pointerType === 'touch' ? 22 : 10;
-  let best = null, bestD = reach;
-  for (const lid in majorOfLink) {
-    const tab = linkObjs[lid].table;
-    const step = Math.max(1, Math.floor(tab.length / 60));
-    let prev = null;
-    for (let i = 0; i < tab.length; i += step) {
-      if (!facing(tab[i])) { prev = null; continue; }
-      const [bx, by] = toScreen(tab[i], camera, r);
-      if (prev) {
-        const [ax, ay] = prev, dx = bx - ax, dy = by - ay;
-        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
-        const d = Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-        if (d < bestD) { bestD = d; best = majorOfLink[lid]; }
-      }
-      prev = [bx, by];
-    }
-  }
-  if (best) return best;
-  if (ray.ray.intersectSphere(planetBall, _hit)) {
-    _hit.normalize();
-    const [x, z, side] = dirToFlat(_hit.x, _hit.y, _hit.z);
-    const m = MAJORS.find((mm) => mm.area && mm.side === side && Math.hypot(x - mm.area.x, z - mm.area.z) < mm.area.r);
-    if (m) return m.id;
-  }
-  return null;
+  if (!ray.ray.intersectSphere(planetBall, _hit)) return null;
+  _hit.normalize();
+  return regionAt(...dirToFlat(_hit.x, _hit.y, _hit.z));
 }
 
 // In the drill-down, a click or hover resolves to a site: a direct hit, else the nearest within reach.
@@ -534,7 +514,7 @@ function hover() {
     const m = pickMajor(lastMove);
     emphasise(m);
     canvas.style.cursor = m ? 'pointer' : '';
-    if (m) showTip(lastMove, MAJOR[m].color, MAJOR[m].name, 'Click to open'); else tip.hidden = true;
+    if (m) showTip(lastMove, MAJOR[m].color, MAJOR[m].name, MAJOR[m].place + ' · click to open'); else tip.hidden = true;
   } else {
     const id = pickSite(lastMove);
     canvas.style.cursor = id ? 'pointer' : '';
@@ -573,10 +553,10 @@ function frame(now) {
     aimCamera();
     if (!flight) listSide(sideInView());
     for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
-    movePackets(t);
+    flyPlane(t);
+    tweenHalos(dt, t);
     for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
     for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;
-    for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
     hover();
     placeLabels();
     renderer.render(scene, camera);
@@ -597,4 +577,5 @@ function frame(now) {
 }
 route();
 requestAnimationFrame(frame);
-window.netlandia = { world, openMajor, closeMajor, selectInDetail, flyTo, camera, controls, nodeObjs, linkObjs };
+window.netlandia = { world, openMajor, closeMajor, selectInDetail, emphasise, flyTo, camera, controls, nodeObjs };
+window.netlandiaFlat = (x, z, side = 0) => flatToDir(x, z, side);

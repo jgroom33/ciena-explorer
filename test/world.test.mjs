@@ -144,3 +144,23 @@ test('six major networks, three per side, each owning its own links', () => {
   assert.ok(has('submarine', 'cls_gw') && has('submarine', 'cls_port') && parts.submarine.nodes.some((id) => id.startsWith('rep_')));
   assert.ok(has('ipcore', 'ixp_gw') && has('aggregation', 'ag_w') && has('xhaul', 'xh_leaf'));
 });
+
+// The sites that define each network stand inside its region on the globe. Sites two
+// networks share (a hub where the mesh meets the metro, a core router that an xhaul
+// ring uplinks into) belong to whichever region they stand in.
+test('the sites that define each network stand inside its region on the globe', async () => {
+  const { regionAt } = await import('../js/world.js');
+  const own = {
+    longhaul: (n) => n.id.startsWith('bb_'),
+    metro: (n) => n.type === 'dc' && n.side === 0 && n.id !== 'dc_isla' || n.type === 'hub',
+    ipcore: (n) => n.type === 'core' && !n.id.startsWith('cr_c') || n.type === 'ixp',
+    aggregation: (n) => n.type === 'agg' || n.id.startsWith('cr_c') || n.id.startsWith('end_') && n.layers[0] === 'access',
+    xhaul: (n) => n.type === 'xhub' || n.type === 'tower',
+  };
+  const bad = [];
+  for (const n of world.nodes) {
+    for (const m in own) if (own[m](n) && regionAt(n.x, n.z, n.side) !== m) bad.push(`${n.id} should be in ${m}, is in ${regionAt(n.x, n.z, n.side)}`);
+  }
+  for (const [x, z] of [[58, 22], [-122, 16]]) assert.equal(regionAt(x, z, 0), 'submarine');
+  assert.deepEqual(bad, []);
+});

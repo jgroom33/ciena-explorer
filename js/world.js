@@ -601,8 +601,10 @@ function gearFor(n) {
 // ---------------------------------------------------------------- major networks
 //
 // Each side of the globe offers three networks to open; everything else is scenery.
-// Each major owns a set of links, and with them the sites at their ends and the
-// amplifiers or repeaters along them.
+// On the globe a network is a *region* of its country (a few circles on that side's
+// map): the harbour and straits, the highlands, the capital. Nothing is wired up
+// there; you click a place. Each major also owns a set of links, and with them the
+// sites at their ends and the amplifiers or repeaters along them, for its own view.
 
 const near = (w, id, c, r) => Math.hypot(w.byId[id].x - c.x, w.byId[id].z - c.z) < r;
 
@@ -610,37 +612,63 @@ export const MAJORS = [
   {
     id: 'submarine', side: 0, name: 'Submarine network', color: LAYER.submarine.color, layers: ['submarine'],
     blurb: 'Cables on the sea floor from Capitalia, Isla Verde and Westmoor, three of them wrapping round the planet to land in Packetland, with repeaters spaced along the seabed.',
+    place: 'The harbour, the strait and the open sea',
+    region: [[58, 22, 22], [100, 44, 16], [-122, 16, 18], [70, 70, 20]],
     owns: (l) => l.layer === 'submarine',
   },
   {
     id: 'longhaul', side: 0, name: 'Long-haul RLS mesh', color: LAYER.backbone.color, layers: ['backbone'],
     blurb: 'The countrywide line system: eight ROADM sites in a mesh, every one with three or more routes, amplifier huts along each span, landing on three Capitalia metro hubs.',
+    place: 'The heartland between the ROADM towns',
+    region: [[-38, -2, 36], [-62, -22, 14], [-40, 32, 14], [-16, 28, 12]],
     owns: (l, w) => l.layer === 'backbone' && ![l.a, l.b].some((id) => w.byId[id].type === 'cls' || w.byId[id].x > 60),
   },
   {
     id: 'metro', side: 0, name: 'Capitalia metro optical', color: LAYER.metro.color, layers: ['metro', 'dci'],
     area: { ...METRO, r: 24 },
     blurb: 'Downtown Capitalia: four metro hubs on a packet-optical ring, and four data centers on their own DCI ring, the harbor campus handing off to the subsea cables.',
+    place: 'Capitalia and its data center campuses',
+    region: [[18, 12, 31]],
     owns: (l, w) => ['metro', 'dci'].includes(l.layer) && [l.a, l.b].every((id) => near(w, id, METRO, 36)),
   },
   {
     id: 'ipcore', side: 1, name: 'IP/MPLS core', color: LAYER.ipcore.color, layers: ['ipcore'],
     blurb: 'Six core routers in a mesh, every one with three or more neighbours: a redundant pair in Coreburg and one in each corner of Packetland, peering at the Gateway Bay internet exchange and serving the cloud and 5G core data centers.',
+    place: 'Gateway Bay, Northport, Edgewater and Southfield',
+    region: [[-52, 12, 16], [-12, -34, 11], [46, -20, 14], [32, 30, 10]],
     owns: (l) => l.layer === 'ipcore',
   },
   {
     id: 'aggregation', side: 1, name: 'Metro aggregation', color: LAYER.agg.color, layers: ['agg', 'access'],
     area: { ...COREBURG, r: 20 },
     blurb: 'A segment-routed aggregation ring round Coreburg, homed on both core routers, with business Ethernet rings looping past banks, offices, a hospital and a school between its routers.',
+    place: 'Downtown Coreburg',
+    region: [[0, 2, 24]],
     owns: (l) => l.layer === 'agg' || l.layer === 'access',
   },
   {
     id: 'xhaul', side: 1, name: '5G mobile xhaul', color: LAYER.xhaul.color, layers: ['xhaul'],
     blurb: 'A ring round the Packetland countryside: cell sites between five pre-aggregation hubs, uplinked into the IP core at Gateway Bay and Edgewater, on to the 5G core.',
+    place: 'The countryside and its cell towers',
+    region: [[-34, -20, 13], [-4, -46, 10], [16, -42, 12], [36, -40, 11], [52, 6, 14], [38, 40, 12], [6, 44, 13], [-22, 38, 12], [-32, 12, 11]],
     owns: (l) => l.layer === 'xhaul',
   },
 ];
 export const MAJOR = Object.fromEntries(MAJORS.map((m) => [m.id, m]));
+
+// Which major's region a spot on a side's map falls in, if any: the one whose circle
+// it is deepest inside, so overlapping edges go to the closer centre.
+export function regionAt(x, z, side) {
+  let best = null, bestD = 1;
+  for (const m of MAJORS) {
+    if (m.side !== side) continue;
+    for (const [cx, cz, r] of m.region) {
+      const d = Math.hypot(x - cx, z - cz) / r;
+      if (d < bestD) { bestD = d; best = m.id; }
+    }
+  }
+  return best;
+}
 
 // For each major: the link ids it owns and every node id that belongs in its own view.
 export function majorParts(world) {
