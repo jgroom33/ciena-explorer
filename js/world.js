@@ -490,3 +490,48 @@ function gearFor(n) {
     default: return '';
   }
 }
+
+// ---------------------------------------------------------------- major networks
+//
+// The globe offers three networks to open; everything else on it is scenery.
+// Each major owns a set of links, and with them the sites at their ends and the
+// amplifiers or repeaters along them.
+
+export const MAJORS = [
+  {
+    id: 'submarine', name: 'Submarine network', color: LAYER.submarine.color, layers: ['submarine'],
+    blurb: 'Cables on the sea floor from the Capitalia, Isla Verde and Westmoor landing stations, out to Isla Verde and over the horizon to Farland and Westerland, with repeaters spaced along the seabed.',
+    owns: (l) => l.layer === 'submarine',
+  },
+  {
+    id: 'longhaul', name: 'Long-haul RLS mesh', color: LAYER.backbone.color, layers: ['backbone'],
+    blurb: 'The countrywide line system: eight ROADM sites in a mesh, every one with three or more routes, amplifier huts along each span, landing on three Capitalia metro hubs.',
+    owns: (l, w) => l.layer === 'backbone' && ![l.a, l.b].some((id) => w.byId[id].type === 'cls' || w.byId[id].x > 60),
+  },
+  {
+    id: 'metro', name: 'Capitalia metro', color: '#2f80ed', layers: ['dci', 'mpls', 'access'],
+    blurb: 'Downtown Capitalia: four data centers on a DCI ring, four metro hubs in a full MPLS mesh, and access rings that loop past banks, offices, a hospital, a school and a cell tower from one hub to the next.',
+    owns: (l, w) => ['dci', 'mpls', 'access'].includes(l.layer) &&
+      [l.a, l.b].every((id) => Math.hypot(w.byId[id].x - METRO.x, w.byId[id].z - METRO.z) < 36),
+  },
+];
+export const MAJOR = Object.fromEntries(MAJORS.map((m) => [m.id, m]));
+
+// For each major: the link ids it owns and every node id that belongs in its own view.
+export function majorParts(world) {
+  const parts = {};
+  for (const m of MAJORS) {
+    const links = world.links.filter((l) => m.owns(l, world));
+    const nodes = new Set();
+    for (const l of links) {
+      nodes.add(l.a); nodes.add(l.b);
+      for (const n of world.nodes) {
+        if (n.id.startsWith(`ila_${l.a}_${l.b}_`) || n.id.startsWith(`rep_${l.a}_${l.b}_`)) nodes.add(n.id);
+      }
+    }
+    // routers stand on their host sites, so bring the hosts along
+    for (const id of [...nodes]) if (world.byId[id].host) nodes.add(world.byId[id].host);
+    parts[m.id] = { links: links.map((l) => l.id), nodes: [...nodes] };
+  }
+  return parts;
+}

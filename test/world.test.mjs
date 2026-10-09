@@ -110,3 +110,23 @@ test('each network keeps to its own part of the country', () => {
   }
   for (const n of at((x) => x.type === 'regional' && x.x < 60)) assert.ok(n.x <= -60, `${n.id} at x=${n.x}`);
 });
+
+test('the three major networks each own their part of the map, and nothing twice', async () => {
+  const { MAJORS, majorParts } = await import('../js/world.js');
+  const parts = majorParts(world);
+  assert.deepEqual(MAJORS.map((m) => m.id), ['submarine', 'longhaul', 'metro']);
+  const seen = new Map();
+  for (const m of MAJORS) {
+    const p = parts[m.id];
+    assert.ok(p.links.length >= 4 && p.nodes.length >= 5, m.id);
+    for (const id of p.links) {
+      assert.ok(!seen.has(id), `${id} is in ${seen.get(id)} and ${m.id}`);
+      seen.set(id, m.id);
+    }
+  }
+  const has = (m, id) => parts[m].nodes.includes(id);
+  assert.ok(has('longhaul', 'bb_junc') && has('longhaul', 'hub_n') && !has('longhaul', 'dc_nw'));
+  assert.ok(has('metro', 'dc_nw') && has('metro', 'rtr_hub_e') && has('metro', 'hub_e') && !has('metro', 'pop_isla'));
+  assert.ok(has('submarine', 'cls_far') && parts.submarine.nodes.some((id) => id.startsWith('rep_')));
+  assert.ok(parts.longhaul.nodes.some((id) => id.startsWith('ila_')));
+});

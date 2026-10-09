@@ -1,9 +1,9 @@
 # Ciena Explorer — Netlandia
 
 A cartoon 3D map of a small made-up country on a tiny round planet, with six kinds
-of Ciena network drawn on it. Spin the planet all the way round, toggle each network
-on and off, fly to one, take the guided tour, or click any building to see what it
-is, what equipment it runs and what it connects to. Packets run along every link.
+of Ciena network drawn on it. Spin the planet all the way round, then click one of the
+three major networks to open it on its own in open space, where every site can be
+clicked for its equipment and connections. Packets run along every link.
 
 ![overview](docs/overview.png)
 
@@ -67,22 +67,37 @@ node build.mjs                  # single-file page -> dist/netlandia.html
 `dist/netlandia.html` loads three.js r160 from jsDelivr and has everything else
 inlined, so it can be shared as one file.
 
+## Two views
+
+**The globe** shows the whole country as scenery, and only three things on it are
+clickable: the **Submarine network**, the **Long-haul RLS mesh** and the **Capitalia
+metro**. Hovering any cable or site of one (or anywhere over downtown, for the metro)
+lights that whole network up; clicking it, or its entry in the panel, opens it.
+
+**A network on its own.** The globe goes away and just that network floats in open
+space: its sites, cables, amplifiers or repeaters, and the traffic on them, with no
+terrain or buildings. Every site is clickable for its details. **Back to the globe**
+(or the browser's back button, or Esc) returns.
+
+![the metro on its own](docs/metro.png)
+
+Each drill-down has its own address, `#submarine`, `#longhaul` or `#metro`, so a link
+can open straight into one, and a separate page can later take over that address.
+
 ## Controls
 
-- Drag (one finger on a phone) spins the planet, any direction, all the way round.
-  Scroll or pinch zooms.
-- Click a layer to show or hide it; the target button beside it isolates that layer
-  and flies to it.
-- Click anything on the map for its card. The links to other sites jump the camera there.
-- **Take the tour** steps through all six layers with a caption for each. Esc stops it.
+- Globe: drag (one finger on a phone) spins the planet, any direction, all the way
+  round; scroll or pinch zooms.
+- Drill-down: drag turns, right-drag or two fingers pan, scroll or pinch zooms.
 
 ## Code
 
 | file | what it does |
 |---|---|
-| `js/world.js` | pure data: the flat-map-to-planet projection, terrain height, towns, every node and link, generated access sites, amplifiers and repeaters |
+| `js/world.js` | pure data: the three major networks and what each owns, the flat-map-to-planet projection, terrain height, towns, every node and link, generated access sites, amplifiers and repeaters |
 | `js/scene.js` | three.js: the planet, sea and atmosphere, towns and trees (instanced), equipment models, cables, boats, wind farm, clouds |
-| `js/main.js` | planet camera and controls, layer state, packets, labels, picking, info card, tour |
+| `js/detail.js` | the drill-down view: one network laid flat in open space, with its own lights and traffic |
+| `js/main.js` | globe camera, the three clickable networks, switching views, labels, picking, the site card |
 | `css/net.css` | the HUD |
 | `test/world.test.mjs` | data checks: links resolve, gear and fibre stay on land, subsea cables stay at sea, no two cables run alongside each other, every ROADM has 3+ routes, no customer is on a spur, each network keeps to its zone |
 | `build.mjs` | bundles everything into `dist/netlandia.html`, and fails if two modules declare the same top-level name |

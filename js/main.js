@@ -1,11 +1,19 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import { buildWorld, LAYERS, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir } from './world.js';
+import { buildWorld, LAYERS, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir, dirToFlat, METRO, MAJORS, MAJOR, majorParts } from './world.js';
 import {
   buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, buildCable, routerPole, place, sph,
 } from './scene.js';
+import { buildDetail } from './detail.js';
 
 const world = buildWorld();
+const parts = majorParts(world);
+// which major network (if any) a link or site belongs to on the globe
+const majorOfLink = {}, majorOfNode = {};
+for (const m of MAJORS) {
+  for (const id of parts[m.id].links) majorOfLink[id] = m.id;
+  for (const id of parts[m.id].nodes) majorOfNode[id] ??= m.id;
+}
 const $ = (s) => document.querySelector(s);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -27,7 +35,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const rig = new THREE.PerspectiveCamera(38, 1, 1, 3000);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3000);
 const dirOf = (x, z) => new THREE.Vector3(...flatToDir(x, z));
-// Open over the home country, a little west so the layer panel doesn't hide Westmoor.
+// Open over the home country, a little west so the panel doesn't hide Westmoor.
 const HOME = { dir: dirOf(-32, 8), dist: R + 245 };
 rig.position.copy(HOME.dir).multiplyScalar(HOME.dist);
 
@@ -153,41 +161,23 @@ function movePackets(t) {
   }
 }
 
-// Selection ring.
-const ring = new THREE.Group();
-const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-ringMesh.rotation.x = -Math.PI / 2;
-ringMesh.raycast = () => {};
-ring.add(ringMesh);
-ring.visible = false;
-scene.add(ring);
+// ---------------------------------------------------------------- the three majors on the globe
 
-// ---------------------------------------------------------------- layer state
-
-const shown = Object.fromEntries(LAYERS.map((l) => [l.id, true]));
-let selected = null;
-
-function applyLayers() {
-  for (const l of LAYERS) layerGroups[l.id].visible = shown[l.id];
-  for (const n of world.nodes) nodeObjs[n.id].visible = n.layers.some((id) => shown[id]);
-  // see-through sea when the cables underneath are the point
-  const onlySub = shown.submarine && LAYERS.filter((l) => shown[l.id]).length <= 2;
-  board.waterMat.opacity = onlySub ? 0.3 : 0.55;
-  for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(shown[btn.dataset.layer]));
-  if (selected && !nodeObjs[selected].visible) select(null);
-}
-
-function emphasise() {
-  const keep = selected ? new Set(world.byId[selected].links) : null;
+// Hovering any part of a major lights up all of it and dims everything else.
+let lit = null;
+function emphasise(majorId) {
+  if (majorId === lit) return;
+  lit = majorId;
   for (const l of world.links) {
     const o = linkObjs[l.id];
-    const dim = keep && !keep.has(l.id);
-    o.mat.transparent = dim;
+    const dim = majorId && majorOfLink[l.id] !== majorId;
+    o.mat.transparent = !!dim;
     o.mat.opacity = dim ? 0.18 : 1;
     o.mat.depthWrite = !dim;
     o.ink.visible = !dim;
     o.mat.needsUpdate = true;
   }
+  for (const b of document.querySelectorAll('[data-major]')) b.classList.toggle('lit', b.dataset.major === majorId);
 }
 
 // ---------------------------------------------------------------- camera moves
@@ -211,76 +201,41 @@ function stepFlight(now) {
 }
 const height = () => rig.position.length() - R;
 
-// Frame a set of nodes: aim at their middle on the sphere, back off to fit the widest.
-function frameNodes(ids) {
-  const mid = new THREE.Vector3();
-  const dirs = ids.map((id) => dirOf(world.byId[id].x, world.byId[id].z));
-  for (const d of dirs) mid.add(d);
-  mid.normalize();
-  const spread = Math.max(...dirs.map((d) => d.angleTo(mid))) * R;
-  flyToDir(mid, THREE.MathUtils.clamp(spread * 2.2 / Math.min(1, camera.aspect), 45, R * 2.6));
-}
-
-function focusLayer(id) {
-  for (const l of LAYERS) shown[l.id] = l.id === id;
-  applyLayers();
-  const ids = world.nodes.filter((n) => n.layers.includes(id)).map((n) => n.id);
-  frameNodes(ids);
-  showCaption(LAYER[id]);
-}
-function showAll() {
-  for (const l of LAYERS) shown[l.id] = true;
-  applyLayers();
-  flyToDir(HOME.dir, HOME.dist - R);
-  showCaption(null);
-}
-
-// ---------------------------------------------------------------- HUD
-
 const TYPE_LABEL = {
   dc: 'Data center', pop: 'RLS ROADM site', hub: 'Metro hub', regional: 'Regional ring hut', ila: 'RLS amplifier hut',
   cls: 'Cable landing station', repeater: 'Undersea repeater', router: 'MPLS router',
   access: 'Access node', ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
 };
 
-function layerStats(id) {
-  const ns = world.nodes.filter((n) => n.layers.includes(id));
-  const ls = world.links.filter((l) => l.layer === id);
-  const c = (t) => ns.filter((n) => n.type === t).length;
+
+function majorStats(id) {
+  const ns = parts[id].nodes.map((n) => world.byId[n]);
+  const c = (pred) => ns.filter(pred).length;
   switch (id) {
-    case 'dci': return `${c('dc')} campuses on a metro ring`;
-    case 'regional': return `3 rings · ${c('regional')} huts`;
-    case 'backbone': return `${ns.filter((n) => n.id.startsWith('bb_')).length} ROADMs · ${c('ila')} amp huts`;
-    case 'submarine': return `${ls.length} cables · ${c('repeater')} repeaters`;
-    case 'mpls': return `${c('router')} routers · full mesh`;
-    case 'access': return `${ns.filter((n) => n.id.startsWith('end_')).length} customers on rings`;
+    case 'submarine': return `${parts[id].links.length} cables · ${c((n) => n.type === 'cls')} landing stations · ${c((n) => n.type === 'repeater')} repeaters`;
+    case 'longhaul': return `${c((n) => n.id.startsWith('bb_'))} ROADMs · ${c((n) => n.type === 'ila')} amplifier huts`;
+    case 'metro': return `${c((n) => n.type === 'dc')} data centers · ${c((n) => n.type === 'router')} routers · ${c((n) => n.id.startsWith('end_'))} customers`;
   }
   return '';
 }
 
-const list = $('#layers');
-for (const l of LAYERS) {
+const list = $('#majors');
+for (const m of MAJORS) {
   const row = document.createElement('li');
-  row.className = 'layer';
-  row.style.setProperty('--c', l.color);
   row.innerHTML = `
-    <button class="toggle" data-layer="${l.id}" aria-pressed="true" title="Show or hide ${l.name}">
+    <button class="major" data-major="${m.id}" style="--c:${m.color}">
       <span class="wire" aria-hidden="true"></span>
-      <span class="txt"><span class="nm">${l.name}</span><span class="st">${layerStats(l.id)}</span></span>
-    </button>
-    <button class="focus" data-focus="${l.id}" title="Fly to ${l.name}" aria-label="Fly to ${l.name}">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+      <span class="txt"><span class="nm">${m.name}</span><span class="st">${majorStats(m.id)}</span></span>
+      <span class="go" aria-hidden="true">Open</span>
     </button>`;
   list.append(row);
 }
 list.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-layer]');
-  if (t) { shown[t.dataset.layer] = !shown[t.dataset.layer]; applyLayers(); stopTour(); return; }
-  const f = e.target.closest('[data-focus]');
-  if (f) { stopTour(); focusLayer(f.dataset.focus); }
+  const b = e.target.closest('[data-major]');
+  if (b) openMajor(b.dataset.major);
 });
-$('#btn-all').addEventListener('click', () => { stopTour(); showAll(); });
-$('#btn-tour').addEventListener('click', () => (tour ? stopTour() : startTour()));
+list.addEventListener('pointerover', (e) => emphasise(e.target.closest('[data-major]')?.dataset.major ?? null));
+list.addEventListener('pointerleave', () => emphasise(null));
 
 const opts = { labels: true, traffic: true, clouds: true };
 for (const b of document.querySelectorAll('[data-opt]')) {
@@ -291,32 +246,117 @@ for (const b of document.querySelectorAll('[data-opt]')) {
   });
 }
 
-const caption = $('#caption');
-function showCaption(layer, step) {
-  caption.hidden = !layer;
-  if (!layer) return;
-  caption.style.setProperty('--c', layer.color);
-  caption.querySelector('.cap-k').textContent = step || 'Layer';
-  caption.querySelector('.cap-t').textContent = layer.name;
-  caption.querySelector('.cap-b').textContent = layer.blurb;
-  caption.querySelector('.cap-g').textContent = layer.gear;
-}
-$('#cap-close').addEventListener('click', () => { stopTour(); showAll(); });
+// ---------------------------------------------------------------- drill-down
 
-// Info card for the clicked thing.
-const card = $('#card');
-function select(id) {
+// Each major opens on its own view, addressed as #submarine, #longhaul or #metro,
+// so the browser's back button works and a real page can take over that address later.
+let mode = 'globe', detail = null;
+const details = {};
+const detailCam = new THREE.PerspectiveCamera(38, 1, 0.5, 6000);
+const detailControls = new OrbitControls(detailCam, canvas);
+detailControls.enabled = false;
+detailControls.enableDamping = true;
+detailControls.dampingFactor = 0.08;
+detailControls.screenSpacePanning = true;
+detailControls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+detailControls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+const panel = $('#panel'), detailPanel = $('#detail'), card = $('#card');
+const detailLabels = $('#detail-labels');
+const hint = $('.hint');
+const GLOBE_HINT = hint.textContent;
+
+function openMajor(id) {
+  if (location.hash.slice(1) !== id) { location.hash = id; return; }   // hashchange comes back here
+  const m = MAJOR[id];
+  detail = details[id] ??= buildDetail(world, parts[id]);
+  mode = 'detail';
+  emphasise(null);
+  controls.enabled = false;
+  detailControls.enabled = true;
+  const d = detail.extent * 1.55 / Math.min(1, detailCam.aspect || 1);
+  detailControls.target.set(0, 0, 0);
+  detailCam.position.setFromSphericalCoords(d, 0.85, 0.3);
+  detailControls.minDistance = detail.extent * 0.12;
+  detailControls.maxDistance = detail.extent * 4;
+  detailControls.update();
+  // centre the network in the space beside the panel, not behind it
+  if (innerWidth > 760) {
+    detailCam.updateMatrixWorld();
+    const visibleWidth = 2 * d * Math.tan(THREE.MathUtils.degToRad(detailCam.fov / 2)) * detailCam.aspect;
+    const right = new THREE.Vector3().setFromMatrixColumn(detailCam.matrixWorld, 0).setY(0).normalize();
+    const shift = right.multiplyScalar(-(panel.offsetWidth / 2 + 16) / innerWidth * visibleWidth);
+    detailCam.position.add(shift);
+    detailControls.target.add(shift);
+    detailControls.update();
+  }
+  hint.textContent = 'Drag to turn · Right-drag or two fingers to pan · Scroll or pinch to zoom · Click a site';
+
+  detailPanel.style.setProperty('--c', m.color);
+  $('#d-title').textContent = m.name;
+  $('#d-blurb').textContent = m.blurb;
+  $('#d-stats').textContent = majorStats(id);
+  $('#d-layers').innerHTML = m.layers.map((l) => `<span class="chip" style="--c:${LAYER[l].color}">${LAYER[l].name}</span>`).join('');
+  detailLabels.replaceChildren();
+  detail.labels = detail.nodes.filter((n) => !['ila', 'repeater', 'router'].includes(n.type)).map((n) => {
+    const el = document.createElement('div');
+    el.className = 'lbl tag';
+    el.style.setProperty('--c', LAYER[n.layers[0]].color);
+    el.textContent = n.name;
+    detailLabels.append(el);
+    return { el, pos: detail.nodeObjs[n.id].position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0)) };
+  });
+  panel.hidden = true;
+  detailPanel.hidden = false;
+  labelLayer.hidden = true;
+  detailLabels.hidden = false;
+  tip.hidden = true;
+  selectInDetail(null);
+}
+
+function closeMajor() {
+  mode = 'globe';
+  detailControls.enabled = false;
+  controls.enabled = true;
+  panel.hidden = false;
+  detailPanel.hidden = true;
+  labelLayer.hidden = false;
+  detailLabels.hidden = true;
+  card.hidden = true;
+  hint.textContent = GLOBE_HINT;
+}
+$('#btn-back').addEventListener('click', () => { if (location.hash) history.back(); else closeMajor(); });
+function route() {
+  const id = location.hash.slice(1);
+  if (MAJOR[id]) openMajor(id); else if (mode === 'detail') closeMajor();
+}
+addEventListener('hashchange', route);
+
+// In the drill-down, every site is clickable.
+let selected = null;
+function selectInDetail(id) {
   selected = id;
+  const ring = detail.ring;
   ring.visible = !!id;
-  emphasise();
+  const keep = id ? new Set(world.byId[id].links) : null;
+  for (const lid in detail.linkObjs) {
+    const o = detail.linkObjs[lid];
+    const dim = keep && !keep.has(lid);
+    o.mat.transparent = !!dim;
+    o.mat.opacity = dim ? 0.18 : 1;
+    o.mat.depthWrite = !dim;
+    o.ink.visible = !dim;
+    o.mat.needsUpdate = true;
+  }
   if (!id) { card.hidden = true; return; }
   const n = world.byId[id];
   const layer = LAYER[n.layers[0]];
-  place(ring, n.x, nodeYs[id] + (n.type === 'router' ? -0.6 : 0.25), n.z);
-  ring.scale.setScalar(n.type === 'dc' ? 2 : n.type === 'router' ? 0.7 : n.type === 'ila' || n.type === 'repeater' ? 0.5 : 1);
-  ringMesh.material.color.set(layer.color);
+  ring.position.copy(detail.nodeObjs[id].position).setY(n.type === 'router' ? detail.nodeObjs[id].position.y - 0.6 * detail.space.k : 0.2);
+  ring.scale.setScalar(n.type === 'dc' ? 2 : n.type === 'ila' || n.type === 'repeater' ? 0.5 : 1);
+  ring.material.color.set(layer.color);
   card.style.setProperty('--c', layer.color);
-  const neighbours = [...new Set(n.links.map((lid) => {
+  const inView = new Set(detail.links.map((l) => l.id));
+  const neighbours = [...new Set(n.links.filter((lid) => inView.has(lid)).map((lid) => {
     const l = world.links.find((x) => x.id === lid);
     return l.a === id ? l.b : l.a;
   }))].map((nid) => world.byId[nid]);
@@ -326,24 +366,15 @@ function select(id) {
   card.querySelector('.card-gear').textContent = n.gear || '';
   card.querySelector('.card-layers').innerHTML = n.layers.map((lid) =>
     `<span class="chip" style="--c:${LAYER[lid].color}">${LAYER[lid].short}</span>`).join('');
-  const nb = card.querySelector('.card-links');
-  nb.innerHTML = neighbours.length
-    ? neighbours.map((m) => `<li><button data-goto="${m.id}">${m.name}</button></li>`).join('')
-    : '<li class="none">Nothing else on the map</li>';
+  card.querySelector('.card-links').innerHTML = neighbours.map((m) => `<li><button data-goto="${m.id}">${m.name}</button></li>`).join('');
   card.querySelector('.card-links-h').hidden = !neighbours.length;
   card.hidden = false;
 }
 card.addEventListener('click', (e) => {
   const g = e.target.closest('[data-goto]');
-  if (g) {
-    const n = world.byId[g.dataset.goto];
-    const lay = n.layers.find((x) => !shown[x]);
-    if (lay && !n.layers.some((x) => shown[x])) { shown[lay] = true; applyLayers(); }
-    select(n.id);
-    flyTo(n.x, n.z, Math.min(height(), 110));
-  }
+  if (g && detail) selectInDetail(g.dataset.goto);
 });
-$('#card-close').addEventListener('click', () => select(null));
+$('#card-close').addEventListener('click', () => selectInDetail(null));
 
 // ---------------------------------------------------------------- labels
 
@@ -367,7 +398,7 @@ for (const n of world.nodes.filter((x) => x.type === 'dc' || (x.type === 'cls' &
 const tip = document.createElement('div');
 tip.className = 'lbl tip';
 tip.hidden = true;
-labelLayer.append(tip);
+$('#tips').append(tip);
 
 const _lp = new THREE.Vector3(), _fv = new THREE.Vector3();
 // On the side of the planet facing the camera (not over the horizon).
@@ -378,7 +409,7 @@ function placeLabels() {
   for (const L of labels) {
     let vis = opts.labels && facing(L.pos);
     if (L.town) vis &&= hh < 150;
-    if (L.tag) vis &&= hh < 140 && nodeObjs[L.node].visible;
+    if (L.tag) vis &&= hh < 140;
     if (vis) {
       _lp.copy(L.pos).project(camera);
       vis = _lp.z < 1 && Math.abs(_lp.x) < 1.1 && Math.abs(_lp.y) < 1.1;
@@ -392,80 +423,105 @@ function placeLabels() {
 
 const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
-function pick(ev) {
+const planetBall = new THREE.Sphere(new THREE.Vector3(), R);
+const _hit = new THREE.Vector3();
+const toScreen = (v, cam, r) => { _lp.copy(v).project(cam); return [((_lp.x + 1) / 2) * r.width, ((1 - _lp.y) / 2) * r.height, _lp.z]; };
+
+// On the globe a click or hover resolves to one of the three majors (or nothing):
+// a site or cable that belongs to it, a near miss on one (cables are thin from up
+// here, and fingers are fat), or for the metro, anywhere over downtown Capitalia.
+function pickMajor(ev) {
   const r = canvas.getBoundingClientRect();
-  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  const px = ev.clientX - r.left, py = ev.clientY - r.top;
+  ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
   for (const hit of ray.intersectObjects(pickables, true)) {
-    let o = hit.object, ok = true;
-    for (; o; o = o.parent) if (!o.visible) { ok = false; break; }
-    if (ok && hit.object.userData.nodeId && facing(nodeObjs[hit.object.userData.nodeId].position)) return hit.object.userData.nodeId;
+    const id = hit.object.userData.nodeId;
+    if (id && majorOfNode[id] && facing(nodeObjs[id].position)) return majorOfNode[id];
+  }
+  const reach = ev.pointerType === 'touch' ? 22 : 10;
+  let best = null, bestD = reach;
+  for (const lid in majorOfLink) {
+    const tab = linkObjs[lid].table;
+    const step = Math.max(1, Math.floor(tab.length / 60));
+    let prev = null;
+    for (let i = 0; i < tab.length; i += step) {
+      if (!facing(tab[i])) { prev = null; continue; }
+      const [bx, by] = toScreen(tab[i], camera, r);
+      if (prev) {
+        const [ax, ay] = prev, dx = bx - ax, dy = by - ay;
+        const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+        const d = Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+        if (d < bestD) { bestD = d; best = majorOfLink[lid]; }
+      }
+      prev = [bx, by];
+    }
+  }
+  if (best) return best;
+  if (ray.ray.intersectSphere(planetBall, _hit)) {
+    _hit.normalize();
+    const [x, z] = dirToFlat(_hit.x, _hit.y, _hit.z);
+    if (Math.hypot(x - METRO.x, z - METRO.z) < 24) return 'metro';
   }
   return null;
 }
-let hoverId = null, lastMove = null;
+
+// In the drill-down, a click or hover resolves to a site: a direct hit, else the nearest within reach.
+function pickSite(ev) {
+  const r = canvas.getBoundingClientRect();
+  const px = ev.clientX - r.left, py = ev.clientY - r.top;
+  ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, detailCam);
+  for (const hit of ray.intersectObjects(detail.pickables, true)) if (hit.object.userData.nodeId) return hit.object.userData.nodeId;
+  let best = null, bestD = ev.pointerType === 'touch' ? 24 : 14;
+  for (const n of detail.nodes) {
+    if (n.type === 'ila' || n.type === 'repeater') continue;
+    const [x, y, z] = toScreen(detail.nodeObjs[n.id].position, detailCam, r);
+    const d = Math.hypot(x - px, y - py);
+    if (z < 1 && d < bestD) { bestD = d; best = n.id; }
+  }
+  return best;
+}
+
+let lastMove = null;
 canvas.addEventListener('pointermove', (ev) => { lastMove = ev; });
-canvas.addEventListener('pointerleave', () => { lastMove = null; hoverId = null; tip.hidden = true; canvas.style.cursor = ''; });
+canvas.addEventListener('pointerleave', () => { lastMove = null; tip.hidden = true; canvas.style.cursor = ''; if (mode === 'globe') emphasise(null); });
 let down = null;
 canvas.addEventListener('pointerdown', (ev) => { down = [ev.clientX, ev.clientY]; });
 canvas.addEventListener('pointerup', (ev) => {
   if (!down || Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 5) return;
-  const id = pick(ev);
-  select(id);
-  if (id) {
-    const n = world.byId[id];
-    if (height() > 140) flyTo(n.x, n.z, 110);
+  if (mode === 'globe') {
+    const m = pickMajor(ev);
+    if (m) openMajor(m);
+  } else {
+    selectInDetail(pickSite(ev));
   }
 });
+function showTip(ev, color, title, sub) {
+  const r = canvas.getBoundingClientRect();
+  tip.style.setProperty('--c', color);
+  tip.innerHTML = `<b>${title}</b><span>${sub}</span>`;
+  tip.style.transform = `translate(${ev.clientX - r.left + 14}px, ${ev.clientY - r.top + 14}px)`;
+  tip.hidden = false;
+}
 function hover() {
   if (!lastMove || flight) return;
-  const id = pick(lastMove);
-  hoverId = id;
-  canvas.style.cursor = id ? 'pointer' : '';
-  tip.hidden = !id;
-  if (id) {
-    const n = world.byId[id];
-    tip.style.setProperty('--c', LAYER[n.layers[0]].color);
-    tip.innerHTML = `<b>${n.name}</b><span>${TYPE_LABEL[n.type]}</span>`;
-    const r = canvas.getBoundingClientRect();
-    tip.style.transform = `translate(${lastMove.clientX - r.left + 14}px, ${lastMove.clientY - r.top + 14}px)`;
+  if (mode === 'globe') {
+    const m = pickMajor(lastMove);
+    emphasise(m);
+    canvas.style.cursor = m ? 'pointer' : '';
+    if (m) showTip(lastMove, MAJOR[m].color, MAJOR[m].name, 'Click to open'); else tip.hidden = true;
+  } else {
+    const id = pickSite(lastMove);
+    canvas.style.cursor = id ? 'pointer' : '';
+    if (id) showTip(lastMove, LAYER[world.byId[id].layers[0]].color, world.byId[id].name, TYPE_LABEL[world.byId[id].type]); else tip.hidden = true;
   }
   lastMove = null;
 }
 
-// ---------------------------------------------------------------- tour
-
-let tour = null;
-function startTour() {
-  tour = { i: 0, timer: null };
-  $('#btn-tour').textContent = 'Stop tour';
-  $('#btn-tour').setAttribute('aria-pressed', 'true');
-  select(null);
-  nextStop();
-}
-function nextStop() {
-  if (!tour) return;
-  if (tour.i >= LAYERS.length) { stopTour(); showAll(); return; }
-  const l = LAYERS[tour.i];
-  focusLayer(l.id);
-  showCaption(l, `Stop ${tour.i + 1} of ${LAYERS.length}`);
-  tour.i++;
-  tour.timer = setTimeout(nextStop, 7000);
-}
-function stopTour() {
-  if (!tour) return;
-  clearTimeout(tour.timer);
-  tour = null;
-  $('#btn-tour').textContent = 'Take the tour';
-  $('#btn-tour').setAttribute('aria-pressed', 'false');
-}
-$('#cap-next').addEventListener('click', () => {
-  if (!tour) { const i = LAYERS.findIndex((l) => l.name === caption.querySelector('.cap-t').textContent); focusLayer(LAYERS[(i + 1) % LAYERS.length].id); return; }
-  clearTimeout(tour.timer);
-  nextStop();
-});
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { stopTour(); select(null); }
+  if (e.key !== 'Escape' || mode !== 'detail') return;
+  if (selected) selectInDetail(null); else $('#btn-back').click();
 });
 
 // ---------------------------------------------------------------- loop
@@ -474,9 +530,10 @@ function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
     renderer.setSize(w, h, false);
-    camera.aspect = rig.aspect = w / h;
+    camera.aspect = rig.aspect = detailCam.aspect = w / h;
     camera.updateProjectionMatrix();
     rig.updateProjectionMatrix();
+    detailCam.updateProjectionMatrix();
   }
 }
 
@@ -486,21 +543,33 @@ function frame(now) {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (!reduceMotion) t += dt;
   resize();
-  stepFlight(now);
-  controls.update();
-  aimCamera();
-  for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
-  movePackets(t);
-  for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
-  for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;
-  for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
-  ringMesh.rotation.z = t;
-  ringMesh.position.y = Math.sin(t * 3) * 0.3;
-  hover();
-  placeLabels();
-  renderer.render(scene, camera);
+  if (mode === 'globe') {
+    stepFlight(now);
+    controls.update();
+    aimCamera();
+    for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
+    movePackets(t);
+    for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
+    for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;
+    for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
+    hover();
+    placeLabels();
+    renderer.render(scene, camera);
+  } else {
+    detailControls.update();
+    detail.update(t, opts.traffic);
+    detail.ring.rotation.z = t;
+    hover();
+    const r = canvas.getBoundingClientRect();
+    for (const L of detail.labels) {
+      const [x, y, z] = toScreen(L.pos, detailCam, r);
+      L.el.hidden = !opts.labels || z > 1;
+      L.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    }
+    renderer.render(detail.scene, detailCam);
+  }
   requestAnimationFrame(frame);
 }
-applyLayers();
+route();
 requestAnimationFrame(frame);
-window.netlandia = { world, select, focusLayer, showAll, flyTo, camera, controls };
+window.netlandia = { world, openMajor, closeMajor, selectInDetail, flyTo, camera, controls, nodeObjs, linkObjs };

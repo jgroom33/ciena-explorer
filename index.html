@@ -16,19 +16,17 @@
 <div id="app">
   <canvas id="view" aria-label="3D map of Netlandia's networks"></canvas>
   <div id="labels" aria-hidden="true"></div>
+  <div id="detail-labels" class="labels" aria-hidden="true" hidden></div>
+  <div id="tips" class="labels" aria-hidden="true"></div>
 
   <header class="title">
     <h1>Netlandia</h1>
     <p>Six Ciena networks, one tiny country</p>
   </header>
 
-  <nav class="panel" aria-label="Network layers">
-    <h2>Networks</h2>
-    <ul id="layers"></ul>
-    <div class="tools">
-      <button id="btn-tour" class="primary" aria-pressed="false">Take the tour</button>
-      <button id="btn-all">Show everything</button>
-    </div>
+  <nav id="panel" class="panel" aria-label="Networks">
+    <h2>Open a network</h2>
+    <ul id="majors"></ul>
     <div class="opts" role="group" aria-label="Display">
       <button data-opt="traffic" aria-pressed="true">Traffic</button>
       <button data-opt="labels" aria-pressed="true">Labels</button>
@@ -36,15 +34,12 @@
     </div>
   </nav>
 
-  <section id="caption" class="caption" hidden aria-live="polite">
-    <span class="cap-k"></span>
-    <h3 class="cap-t"></h3>
-    <p class="cap-b"></p>
-    <p class="cap-g"></p>
-    <div class="cap-btns">
-      <button id="cap-next" class="primary">Next layer</button>
-      <button id="cap-close">Show everything</button>
-    </div>
+  <section id="detail" class="panel detail" hidden aria-live="polite">
+    <button id="btn-back" class="back">&larr; Back to the globe</button>
+    <h2 id="d-title"></h2>
+    <p id="d-stats" class="d-stats"></p>
+    <p id="d-blurb"></p>
+    <div id="d-layers" class="d-layers"></div>
   </section>
 
   <aside id="card" class="card" hidden aria-live="polite">
@@ -58,7 +53,7 @@
     <ul class="card-links"></ul>
   </aside>
 
-  <p class="hint">Drag to spin the planet · Scroll or pinch to zoom · Click anything</p>
+  <p class="hint">Drag to spin the planet · Scroll or pinch to zoom · Click a network to open it</p>
 </div>
 <!--/HUD-->
 <script type="module" src="js/main.js"></script>

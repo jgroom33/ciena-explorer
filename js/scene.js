@@ -563,8 +563,11 @@ const dash = (() => {
   return t;
 })();
 
-// A cable's centre line as a three.js curve.
-export function linkCurve(world, l, nodeYs) {
+// A cable's centre line as a three.js curve. On the planet by default; given
+// `space` ({ cx, cz, k }) it is laid flat in open space around (cx, cz) instead,
+// with no terrain under it, for the drill-down view of one network.
+export function linkCurve(world, l, nodeYs, space = null) {
+  const P = space ? (x, y, z) => new THREE.Vector3(x - space.cx, y, z - space.cz) : (x, y, z) => sph(x, y, z);
   if (l.layer === 'mpls') {
     // an arc over the planet: straight on the map, raised in the middle
     const a = world.byId[l.a], b = world.byId[l.b];
@@ -575,12 +578,13 @@ export function linkCurve(world, l, nodeYs) {
     for (let i = 0, n = Math.max(12, Math.ceil(len / 2)); i <= n; i++) {
       const t = i / n;
       const y = (1 - t) * (1 - t) * ya + 2 * t * (1 - t) * ym + t * t * yb;
-      pts.push(sph(a.x + (b.x - a.x) * t, y, a.z + (b.z - a.z) * t));
+      pts.push(P(a.x + (b.x - a.x) * t, y, a.z + (b.z - a.z) * t));
     }
     return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len };
   }
   const path = linkPath(world, l);
   const pts = samplePath(path, 1.4).map(([x, z]) => {
+    if (space) return P(x, 0.5 * space.k, z);
     const h = groundY(x, z);
     const y = h < 0 ? heightAt(x, z) + LIFT.submarine : h + LIFT[l.layer];
     return sph(x, y, z);
@@ -588,9 +592,9 @@ export function linkCurve(world, l, nodeYs) {
   return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len: pathLength(path) };
 }
 
-export function buildCable(world, l, color, nodeYs) {
-  const { curve, len } = linkCurve(world, l, nodeYs);
-  const r = RADIUS[l.layer];
+export function buildCable(world, l, color, nodeYs, space = null) {
+  const { curve, len } = linkCurve(world, l, nodeYs, space);
+  const r = RADIUS[l.layer] * (space ? space.k : 1);
   const segs = Math.max(8, Math.ceil(len * 1.6));
   const mat = l.layer === 'mpls'
     ? new THREE.MeshToonMaterial({ color, gradientMap: gradient, alphaMap: dash.clone(), alphaTest: 0.5 })
@@ -599,9 +603,10 @@ export function buildCable(world, l, color, nodeYs) {
     mat.alphaMap.repeat.set(Math.max(2, Math.round(len / 2.2)), 1);
     mat.alphaMap.needsUpdate = true;
   }
-  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, 6, false), mat);
+  const sides = space ? 12 : 6;   // fat cables in open space need rounder tubes
+  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, sides, false), mat);
   mesh.castShadow = l.layer !== 'submarine';
-  const ink = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r + 0.11, 6, false),
+  const ink = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r + 0.11 * (space ? space.k : 1), sides, false),
     l.layer === 'mpls' ? new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide, alphaMap: mat.alphaMap, alphaTest: 0.5 }) : inkMat.clone());
   ink.raycast = () => {};
   mesh.add(ink);
