@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import { buildWorld, LAYER, ENDPOINT, heightAt, heightDir, PLANET_R, flatToDir, dirToFlat, linkDirs, MAJORS, MAJOR, majorParts, regionAt, SIDES, BAND } from './world.js';
+import { buildWorld, LAYER, heightAt, heightDir, PLANET_R, flatToDir, dirToFlat, linkDirs, MAJORS, MAJOR, majorParts, regionAt, SIDES, BAND } from './world.js';
 import {
   buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, place, sph, frameAt, cableShip,
 } from './scene.js';
 import { buildDetail } from './detail.js';
 import { TOPICS, TechPlayer } from './tech.js';
+import { BASICS } from './basics.js';
+import { MODES, DEFAULT_MODE, vocab } from './vocab.js';
 
 const world = buildWorld();
 const parts = majorParts(world);
@@ -16,6 +18,17 @@ for (const m of MAJORS) for (const id of parts[m.id].nodes) majorOfNode[id] ??= 
 for (const n of world.nodes) majorOfNode[n.id] = regionAt(n.x, n.z, n.side) ?? majorOfNode[n.id];
 const $ = (s) => document.querySelector(s);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------------------------------------------------------- reading mode
+//
+// Explorer reads the map as an introduction to networking, in plain words, with its
+// own explainers; Engineer reads it with the trade's terminology and a quieter look.
+// Every string the HUD prints comes from `V`, so switching re-renders whatever is open.
+const MODE_KEY = 'netlandia.mode';
+let modeId = (() => { try { return localStorage.getItem(MODE_KEY); } catch { return null; } })();
+if (!MODES.some((m) => m.id === modeId)) modeId = document.documentElement.dataset.mode || DEFAULT_MODE;
+let V = vocab(modeId);
+const topicsOf = (id) => (V.plain ? BASICS : TOPICS)[id];
 
 // ---------------------------------------------------------------- renderer
 
@@ -265,47 +278,40 @@ function stepFlight(now) {
 }
 const height = () => rig.position.length() - R;
 
-const TYPE_LABEL = {
-  dc: 'Data center', pop: 'RLS ROADM site', hub: 'Metro hub', regional: 'Regional ring hut', ila: 'RLS amplifier hut',
-  cls: 'Cable landing station', repeater: 'Undersea repeater', core: 'Core router', agg: 'Aggregation router',
-  xhub: '5G pre-aggregation hub', ixp: 'Internet exchange',
-  access: 'Access node', ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
-};
-
-
+// The counts behind each network's one-line summary; the words come from the mode.
 function majorStats(id) {
   const ns = parts[id].nodes.map((n) => world.byId[n]);
   const c = (pred) => ns.filter(pred).length;
-  switch (id) {
-    case 'submarine': return `${parts[id].links.length} cables · ${c((n) => n.type === 'cls')} landing stations · ${c((n) => n.type === 'repeater')} repeaters`;
-    case 'longhaul': return `${c((n) => n.id.startsWith('bb_'))} ROADMs · ${c((n) => n.type === 'ila')} amplifier huts`;
-    case 'metro': return `${c((n) => n.type === 'hub')} metro hubs · ${c((n) => n.type === 'dc')} data centers`;
-    case 'ipcore': return `${c((n) => n.type === 'core')} core routers · ${c((n) => n.type === 'dc')} data centers · 1 internet exchange`;
-    case 'aggregation': return `${c((n) => n.type === 'agg')} aggregation routers · ${c((n) => n.id.startsWith('end_'))} business customers`;
-    case 'xhaul': return `${c((n) => n.type === 'xhub')} hubs · ${c((n) => n.type === 'tower')} cell sites`;
-  }
-  return '';
+  const counts = {
+    submarine: [parts[id].links.length, c((n) => n.type === 'cls'), c((n) => n.type === 'repeater')],
+    longhaul: [c((n) => n.id.startsWith('bb_')), c((n) => n.type === 'ila')],
+    metro: [c((n) => n.type === 'hub'), c((n) => n.type === 'dc')],
+    ipcore: [c((n) => n.type === 'core'), c((n) => n.type === 'dc'), c((n) => n.type === 'ixp')],
+    aggregation: [c((n) => n.type === 'agg'), c((n) => n.id.startsWith('end_'))],
+    xhaul: [c((n) => n.type === 'xhub'), c((n) => n.type === 'tower')],
+  }[id];
+  return counts ? V.stats(id, counts) : '';
 }
 
 // The panel lists the three networks on whichever side of the globe is in view;
 // the switch above it spins the globe round to the other side.
 const list = $('#majors');
 let listedSide = null;
-function listSide(side) {
-  if (side === listedSide) return;
+function listSide(side, force = false) {
+  if (side === listedSide && !force) return;
   listedSide = side;
   list.replaceChildren(...MAJORS.filter((m) => m.side === side || m.both).map((m) => {
     const row = document.createElement('li');
     row.innerHTML = `
       <button class="major" data-major="${m.id}" style="--c:${m.color}">
         <span class="wire${LAYER[m.layers[0]].data ? ' dashed' : ''}" aria-hidden="true"></span>
-        <span class="txt"><span class="nm">${m.name}</span><span class="st">${majorStats(m.id)}</span></span>
+        <span class="txt"><span class="nm">${V.majorName(m.id)}</span><span class="st">${majorStats(m.id)}</span></span>
         <span class="go" aria-hidden="true">Open</span>
       </button>`;
     return row;
   }));
   for (const b of document.querySelectorAll('[data-side]')) b.setAttribute('aria-pressed', String(+b.dataset.side === side));
-  $('#side-name').textContent = `${SIDES[side].land} · ${SIDES[side].name.toLowerCase()}`;
+  $('#side-name').textContent = V.sideHeading(side);
 }
 for (const b of document.querySelectorAll('[data-side]')) {
   b.addEventListener('click', () => {
@@ -334,7 +340,7 @@ for (const b of document.querySelectorAll('[data-opt]')) {
 
 // Each major opens on its own view, addressed as #submarine, #longhaul or #metro,
 // so the browser's back button works and a real page can take over that address later.
-let mode = 'globe', detail = null;
+let mode = 'globe', detail = null, detailId = null;
 const details = {};
 const detailCam = new THREE.PerspectiveCamera(38, 1, 0.5, 6000);
 const detailControls = new OrbitControls(detailCam, canvas);
@@ -346,16 +352,18 @@ detailControls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DO
 detailControls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
 const panel = $('#panel'), detailPanel = $('#detail'), card = $('#card');
+// the panels hang below the title card, whatever height the mode gives it
+new ResizeObserver(() => $('#app').style.setProperty('--title-h', `${$('.title').getBoundingClientRect().height}px`)).observe($('.title'));
 const detailLabels = $('#detail-labels');
 const hint = $('.hint');
-const GLOBE_HINT = hint.textContent;
 
 function openMajor(id, topicId = null) {
   const want = topicId ? `${id}.${topicId}` : id;
   if (location.hash.slice(1) !== want) { location.hash = want; return; }   // hashchange comes back here
-  const m = MAJOR[id];
   const already = mode === 'detail' && detail === details[id];
   detail = details[id] ??= buildDetail(world, parts[id]);
+  detailId = id;
+  dressDetail(detail);
   if (already) { showTopic(topicId); return; }
   mode = 'detail';
   emphasise(null);
@@ -378,30 +386,7 @@ function openMajor(id, topicId = null) {
     detailControls.target.add(shift);
     detailControls.update();
   }
-  hint.textContent = 'Drag to turn · Right-drag or two fingers to pan · Scroll or pinch to zoom · Click a site';
-
-  detailPanel.style.setProperty('--c', m.color);
-  $('#d-title').textContent = m.name;
-  $('#d-blurb').textContent = m.blurb;
-  $('#d-stats').textContent = majorStats(id);
-  $('#d-layers').innerHTML = m.layers.map((l) => `<span class="chip" style="--c:${LAYER[l].color}">${LAYER[l].name}</span>`).join('');
-  detailLabels.replaceChildren();
-  detail.labels = detail.nodes.filter((n) => !['ila', 'repeater', 'router'].includes(n.type)).map((n) => {
-    const el = document.createElement('div');
-    el.className = 'lbl tag';
-    el.style.setProperty('--c', LAYER[n.layers[0]].color);
-    el.textContent = n.name;
-    detailLabels.append(el);
-    const o = detail.nodeObjs[n.id];
-    return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
-  });
-  $('#d-topics').replaceChildren(...TOPICS[id].map((t) => {
-    const b = document.createElement('button');
-    b.className = 'topic';
-    b.dataset.topic = t.id;
-    b.innerHTML = `<b>${t.name}</b><span>${t.summary}</span>`;
-    return b;
-  }));
+  renderDetailPanel(id);
   panel.hidden = true;
   detailPanel.hidden = false;
   labelLayer.hidden = true;
@@ -411,13 +396,48 @@ function openMajor(id, topicId = null) {
   showTopic(topicId);
 }
 
+// The words on a network's view: the panel, the site labels and the topic list.
+// Called when a network opens and again when the reading mode changes.
+function renderDetailPanel(id) {
+  const m = MAJOR[id];
+  hint.textContent = V.hints.detail;
+  detailPanel.style.setProperty('--c', m.color);
+  $('#d-title').textContent = V.majorName(id);
+  $('#d-blurb').textContent = V.majorBlurb(id);
+  $('#d-stats').textContent = majorStats(id);
+  $('#d-layers').innerHTML = m.layers.map((l) => `<span class="chip" style="--c:${LAYER[l].color}">${V.layerName(l)}</span>`).join('');
+  $('#d-tech-h').textContent = V.techHeading;
+  detailLabels.replaceChildren();
+  detail.labels = detail.nodes.filter((n) => !['ila', 'repeater', 'router'].includes(n.type)).map((n) => {
+    const el = document.createElement('div');
+    el.className = 'lbl tag';
+    el.style.setProperty('--c', LAYER[n.layers[0]].color);
+    el.textContent = V.nodeName(n);
+    detailLabels.append(el);
+    const o = detail.nodeObjs[n.id];
+    return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
+  });
+  $('#d-topics').replaceChildren(...topicsOf(id).map((t) => {
+    const b = document.createElement('button');
+    b.className = 'topic';
+    b.dataset.topic = t.id;
+    b.innerHTML = `<b>${t.name}</b><span>${t.summary}</span>`;
+    return b;
+  }));
+}
+// What the mode changes on a built view: the marker wording and whether the toys show.
+function dressDetail(d) {
+  d.fx.words = { cut: V.cutLabel, block: V.blockLabel };
+  for (const o of d.toys) o.visible = V.plain;
+}
+
 // ---------------------------------------------------------------- technology explainers
 
 const techCard = $('#tech');
 let player = null;
 function showTopic(topicId) {
-  const majorId = Object.keys(details).find((k) => details[k] === detail);
-  const topic = topicId && TOPICS[majorId].find((t) => t.id === topicId);
+  const majorId = detailId;
+  const topic = topicId && topicsOf(majorId).find((t) => t.id === topicId);
   if (player) { player.close(); player = null; }
   for (const b of document.querySelectorAll('[data-topic]')) b.setAttribute('aria-pressed', String(b.dataset.topic === topicId));
   if (!topic) { techCard.hidden = true; return; }
@@ -439,8 +459,7 @@ function renderStep(step) {
 $('#d-topics').addEventListener('click', (e) => {
   const b = e.target.closest('[data-topic]');
   if (!b) return;
-  const majorId = Object.keys(details).find((k) => details[k] === detail);
-  openMajor(majorId, b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.topic);
+  openMajor(detailId, b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.topic);
 });
 $('#t-next').addEventListener('click', () => {
   if (!player) return;
@@ -450,8 +469,7 @@ $('#t-next').addEventListener('click', () => {
 $('#t-back').addEventListener('click', () => { if (player && player.i > 0) renderStep(player.back()); });
 $('#t-close').addEventListener('click', closeTopic);
 function closeTopic() {
-  const majorId = Object.keys(details).find((k) => details[k] === detail);
-  if (majorId) openMajor(majorId, null);
+  if (detailId) openMajor(detailId, null);
 }
 
 function closeMajor() {
@@ -465,14 +483,17 @@ function closeMajor() {
   labelLayer.hidden = false;
   detailLabels.hidden = true;
   card.hidden = true;
-  hint.textContent = GLOBE_HINT;
+  hint.textContent = V.hints.globe;
 }
 // Back goes to the globe in one hop, however many topics were visited on the way.
 $('#btn-back').addEventListener('click', () => { history.pushState(null, '', location.pathname + location.search); route(); });
 function route() {
   const [id, topicId] = location.hash.slice(1).split('.');
-  if (MAJOR[id]) openMajor(id, TOPICS[id].some((t) => t.id === topicId) ? topicId : null);
-  else if (mode === 'detail') closeMajor();
+  if (!MAJOR[id]) { if (mode === 'detail') closeMajor(); return; }
+  // a link to an explainer the other mode has switches to that mode
+  const has = (set) => set[id].some((t) => t.id === topicId);
+  if (topicId && !has(V.plain ? BASICS : TOPICS) && has(V.plain ? TOPICS : BASICS)) applyMode(V.plain ? 'engineer' : 'explorer');
+  openMajor(id, topicsOf(id).some((t) => t.id === topicId) ? topicId : null);
 }
 addEventListener('hashchange', route);
 
@@ -505,13 +526,15 @@ function selectInDetail(id) {
     const l = world.links.find((x) => x.id === lid);
     return l.a === id ? l.b : l.a;
   }))].map((nid) => world.byId[nid]);
-  card.querySelector('.card-k').textContent = TYPE_LABEL[n.type] || n.type;
-  card.querySelector('.card-t').textContent = n.name;
-  card.querySelector('.card-role').textContent = n.role || '';
-  card.querySelector('.card-gear').textContent = n.gear || '';
+  card.querySelector('.card-k').textContent = V.typeLabel(n.type);
+  card.querySelector('.card-t').textContent = V.nodeName(n);
+  card.querySelector('.card-role').textContent = V.nodeRole(n);
+  card.querySelector('.card-gear-h').textContent = V.gearHeading;
+  card.querySelector('.card-gear').textContent = V.nodeGear(n);
+  card.querySelector('dl').hidden = !V.nodeGear(n);
   card.querySelector('.card-layers').innerHTML = n.layers.map((lid) =>
-    `<span class="chip" style="--c:${LAYER[lid].color}">${LAYER[lid].short}</span>`).join('');
-  card.querySelector('.card-links').innerHTML = neighbours.map((m) => `<li><button data-goto="${m.id}">${m.name}</button></li>`).join('');
+    `<span class="chip" style="--c:${LAYER[lid].color}">${V.layerShort(lid)}</span>`).join('');
+  card.querySelector('.card-links').innerHTML = neighbours.map((m) => `<li><button data-goto="${m.id}">${V.nodeName(m)}</button></li>`).join('');
   card.querySelector('.card-links-h').hidden = !neighbours.length;
   card.hidden = false;
 }
@@ -624,11 +647,11 @@ function hover() {
     const m = pickMajor(lastMove);
     emphasise(m);
     canvas.style.cursor = m ? 'pointer' : '';
-    if (m) showTip(lastMove, MAJOR[m].color, MAJOR[m].name, MAJOR[m].place + ' · click to open'); else tip.hidden = true;
+    if (m) showTip(lastMove, MAJOR[m].color, V.majorName(m), V.majorPlace(m) + ' · click to open'); else tip.hidden = true;
   } else {
     const id = pickSite(lastMove);
     canvas.style.cursor = id ? 'pointer' : '';
-    if (id) showTip(lastMove, LAYER[world.byId[id].layers[0]].color, world.byId[id].name, TYPE_LABEL[world.byId[id].type]); else tip.hidden = true;
+    if (id) showTip(lastMove, LAYER[world.byId[id].layers[0]].color, V.nodeName(world.byId[id]), V.typeLabel(world.byId[id].type)); else tip.hidden = true;
   }
   lastMove = null;
 }
@@ -640,6 +663,32 @@ addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (selected) selectInDetail(null); else if (player) closeTopic(); else $('#btn-back').click();
 });
+
+// ---------------------------------------------------------------- switching mode
+
+function applyMode(id) {
+  modeId = id;
+  V = vocab(id);
+  document.documentElement.dataset.mode = id;
+  try { localStorage.setItem(MODE_KEY, id); } catch {}
+  for (const b of document.querySelectorAll('.modes [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === id));
+  $('#subtitle').textContent = V.subtitle;
+  plane.visible = V.plain;
+  for (const k in details) dressDetail(details[k]);
+  listSide(listedSide, true);
+  if (mode === 'detail') {
+    // the explainers differ between modes, so an open one closes
+    if (player) { player.close(); player = null; }
+    techCard.hidden = true;
+    if (location.hash.includes('.')) history.replaceState(null, '', `#${detailId}`);
+    renderDetailPanel(detailId);
+    if (selected) selectInDetail(selected);
+  } else {
+    hint.textContent = V.hints.globe;
+  }
+}
+for (const b of document.querySelectorAll('.modes [data-mode]')) b.addEventListener('click', () => { if (b.dataset.mode !== modeId) applyMode(b.dataset.mode); });
+applyMode(modeId);
 
 // ---------------------------------------------------------------- loop
 

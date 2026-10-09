@@ -2,10 +2,12 @@
 <title>Netlandia Network Map</title>
 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* Board-game HUD: sticker cards with ink outlines over a sky, the map fills the screen.
-   Deliberately a single daylight look, so every colour is set here explicitly. */
+/* Two looks, picked by html[data-mode]. Explorer (the default) is the board game:
+   sticker cards with ink outlines over a daylight sky. Engineer swaps the tokens at
+   the bottom of this file for a quiet, flat console. Every colour is set explicitly;
+   the OS theme is not consulted. */
 :root {
   --ink: #1d2a44;
   --paper: #ffffff;
@@ -17,6 +19,25 @@
   --body: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
   --line: 2.5px solid var(--ink);
   --lift: 0 4px 0 var(--ink);
+  --lift-s: 0 2px 0 var(--ink);
+  --lift-m: 0 3px 0 var(--ink);
+  --rule: 2px solid var(--ink);
+  --radius: 16px;
+  --radius-s: 10px;
+  --tilt: rotate(-1.5deg);
+  --well: #eef4fb;
+  --sel-bg: var(--ink);
+  --sel-fg: var(--paper);
+  --sel-sub: var(--sky-1);
+  --hint-bg: rgb(29 42 68 / 0.82);
+  --title-stroke: 1.5px var(--ink);
+  --city-stroke: 4px var(--ink);
+  --town-stroke: 3px var(--ink);
+  --city-shadow: 0 3px 0 var(--ink);
+  --town-shadow: 0 2px 0 var(--ink);
+  --press: translateY(2px);
+  --label-case: none;
+  --label-space: 0.12em;
   color-scheme: light;
 }
 
@@ -42,24 +63,24 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   font: 400 15px/1 var(--display);
   letter-spacing: 0.02em;
   color: var(--paper);
-  -webkit-text-stroke: 4px var(--ink);
+  -webkit-text-stroke: var(--city-stroke);
   paint-order: stroke fill;
-  text-shadow: 0 3px 0 var(--ink);
+  text-shadow: var(--city-shadow);
 }
 .lbl.city.big { font-size: 21px; }
-.lbl.city.town { font-size: 12.5px; -webkit-text-stroke-width: 3px; text-shadow: 0 2px 0 var(--ink); }
+.lbl.city.town { font-size: 12.5px; -webkit-text-stroke: var(--town-stroke); text-shadow: var(--town-shadow); }
 .lbl.tag {
   font: 800 11px/1 var(--body);
   background: var(--paper);
-  border: 2px solid var(--ink);
+  border: var(--rule);
   border-left: 7px solid var(--c);
   border-radius: 6px;
   padding: 3px 6px;
-  box-shadow: 0 2px 0 var(--ink);
+  box-shadow: var(--lift-s);
 }
 .lbl.tip {
   display: grid; gap: 1px;
-  background: var(--paper); border: var(--line); border-radius: 10px;
+  background: var(--paper); border: var(--line); border-radius: var(--radius-s);
   padding: 6px 10px; box-shadow: var(--lift);
   border-top: 6px solid var(--c);
 }
@@ -71,56 +92,65 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   position: absolute;
   background: var(--paper);
   border: var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   box-shadow: var(--lift);
 }
 .title {
   top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px;
   padding: 8px 16px 10px;
-  transform: rotate(-1.5deg);
+  transform: var(--tilt);
 }
 .title h1 {
   margin: 0;
   font: 400 34px/1 var(--display);
   letter-spacing: 0.02em;
   color: var(--accent);
-  -webkit-text-stroke: 1.5px var(--ink);
+  -webkit-text-stroke: var(--title-stroke);
   paint-order: stroke fill;
 }
 .title p { margin: 2px 0 0; font-weight: 800; font-size: 13px; color: var(--muted); }
+/* the reading-mode switch under the title */
+.modes { display: grid; grid-template-columns: 1fr 1fr; margin-top: 8px; border: var(--rule); border-radius: var(--radius-s); overflow: hidden; }
+.modes button { display: grid; padding: 4px 10px; border: 0; background: var(--paper); text-align: center; }
+.modes button + button { border-left: var(--rule); }
+.modes b { font: 400 14px/1.1 var(--display); letter-spacing: 0.02em; }
+.modes span { font-size: 10.5px; font-weight: 800; color: var(--muted); }
+.modes button[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); }
+.modes button[aria-pressed="true"] span { color: var(--sel-sub); }
 
 .panel {
-  top: calc(102px + env(safe-area-inset-top, 0px)); left: 16px;
+  /* sits under the title card, whose height the script measures into --title-h */
+  top: calc(var(--title-h, 86px) + 30px + env(safe-area-inset-top, 0px)); left: 16px;
   width: 268px;
   padding: 12px;
   display: grid; gap: 10px;
-  max-height: calc(100% - 160px);
+  max-height: calc(100% - var(--title-h, 86px) - 74px);
   overflow: auto;
 }
-.panel h2 { margin: 0 2px; font: 400 13px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.sides { display: grid; grid-template-columns: 1fr 1fr; border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; }
+.panel h2 { margin: 0 2px; font: 400 13px/1 var(--display); letter-spacing: var(--label-space); text-transform: uppercase; color: var(--muted); }
+.sides { display: grid; grid-template-columns: 1fr 1fr; border: var(--rule); border-radius: 12px; overflow: hidden; }
 .sides button {
   display: grid; gap: 0; padding: 6px 8px; border: 0; background: var(--paper); text-align: center;
 }
-.sides button + button { border-left: 2px solid var(--ink); }
+.sides button + button { border-left: var(--rule); }
 .sides b { font: 400 16px/1.1 var(--display); letter-spacing: 0.02em; }
 .sides span { font-size: 11.5px; font-weight: 800; color: var(--muted); }
-.sides button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-.sides button[aria-pressed="true"] span { color: var(--sky-1); }
+.sides button[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); }
+.sides button[aria-pressed="true"] span { color: var(--sel-sub); }
 #majors { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .major {
   width: 100%;
   display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 9px;
   text-align: left; padding: 8px 10px;
-  background: var(--paper); border: 2px solid var(--ink); border-radius: 12px;
-  box-shadow: 0 3px 0 var(--ink);
+  background: var(--paper); border: var(--rule); border-radius: 12px;
+  box-shadow: var(--lift-m);
   min-width: 0;
 }
 .major:hover, .major.lit { background: color-mix(in srgb, var(--c) 18%, var(--paper)); }
-.major:active { transform: translateY(2px); box-shadow: none; }
+.major:active { transform: var(--press); box-shadow: none; }
 .wire {
   height: 10px; border-radius: 6px; background: var(--c);
-  border: 2px solid var(--ink);
+  border: var(--rule);
   position: relative;
 }
 .wire::after { content: ''; position: absolute; top: 1px; left: 3px; width: 5px; height: 4px; border-radius: 3px; background: rgb(255 255 255 / 0.8); }
@@ -132,14 +162,14 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .st { font-size: 11.5px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
 .go {
   font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px;
-  border: 2px solid var(--ink); background: var(--c);
+  border: var(--rule); background: var(--c);
 }
 .opts { display: flex; gap: 6px; flex-wrap: wrap; }
 .opts button {
   flex: 1; padding: 4px 8px; font-size: 12px; font-weight: 800;
-  border: 2px solid var(--ink); border-radius: 999px; background: var(--paper);
+  border: var(--rule); border-radius: 999px; background: var(--paper);
 }
-.opts button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.opts button[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); }
 
 /* drill-down header */
 .detail { border-top: 10px solid var(--c); gap: 6px; }
@@ -149,23 +179,23 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .d-layers { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .back {
   justify-self: start; padding: 6px 12px; font-weight: 800;
-  border: 2px solid var(--ink); border-radius: 999px; background: var(--accent); color: var(--paper);
-  box-shadow: 0 2px 0 var(--ink);
+  border: var(--rule); border-radius: 999px; background: var(--accent); color: var(--paper);
+  box-shadow: var(--lift-s);
 }
-.back:active { transform: translateY(2px); box-shadow: none; }
+.back:active { transform: var(--press); box-shadow: none; }
 
 /* technology topics in the network panel */
 .d-h { margin: 10px 0 0; font: 400 12px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .topics { display: grid; gap: 6px; }
 .topic {
   display: grid; gap: 1px; text-align: left; padding: 7px 10px;
-  background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; box-shadow: 0 2px 0 var(--ink);
+  background: var(--paper); border: var(--rule); border-radius: var(--radius-s); box-shadow: var(--lift-s);
   min-width: 0;
 }
 .topic b { font-size: 13.5px; font-weight: 800; }
 .topic span { font-size: 11.5px; color: var(--muted); font-weight: 700; line-height: 1.25; }
 .topic:hover { background: color-mix(in srgb, var(--c) 14%, var(--paper)); }
-.topic[aria-pressed="true"] { background: var(--c); color: var(--paper); transform: translateY(2px); box-shadow: none; }
+.topic[aria-pressed="true"] { background: var(--c); color: var(--paper); transform: var(--press); box-shadow: none; }
 .topic[aria-pressed="true"] span { color: rgb(255 255 255 / 0.85); }
 
 /* the explainer card */
@@ -174,42 +204,42 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   bottom: calc(44px + env(safe-area-inset-bottom, 0px));
   width: min(560px, calc(100% - 32px));
   padding: 12px 16px 14px;
-  background: var(--paper); border: var(--line); border-radius: 16px; box-shadow: var(--lift);
+  background: var(--paper); border: var(--line); border-radius: var(--radius); box-shadow: var(--lift);
   border-top: 10px solid var(--c);
   display: grid; gap: 4px;
 }
 .tech .x {
   position: absolute; top: 6px; right: 8px; width: 30px; height: 30px;
-  border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); font-size: 20px; line-height: 1; padding: 0;
+  border: var(--rule); border-radius: 50%; background: var(--paper); font-size: 20px; line-height: 1; padding: 0;
 }
 .t-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .tech h3 { margin: 0 36px 2px 0; font: 400 24px/1.05 var(--display); letter-spacing: 0.01em; text-wrap: balance; }
 .tech p { margin: 0; max-width: 62ch; min-height: 3.6em; }
 .t-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
 .dots { display: flex; gap: 5px; }
-.dots i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper); }
+.dots i { width: 9px; height: 9px; border-radius: 50%; border: var(--rule); background: var(--paper); }
 .dots i.on { background: var(--c); }
 .t-btns { display: flex; gap: 8px; }
 .t-btns button {
-  padding: 7px 14px; border: 2px solid var(--ink); border-radius: 10px;
-  background: var(--paper); box-shadow: 0 2px 0 var(--ink); font-weight: 800;
+  padding: 7px 14px; border: var(--rule); border-radius: var(--radius-s);
+  background: var(--paper); box-shadow: var(--lift-s); font-weight: 800;
 }
 .t-btns button:disabled { opacity: 0.4; box-shadow: none; }
-.t-btns button:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+.t-btns button:active:not(:disabled) { transform: var(--press); box-shadow: none; }
 .tech:not([hidden]) ~ .hint { display: none; }
 
 /* tags the explainers pin to the scene */
 .fxtag {
   position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform;
   font: 800 11.5px/1 var(--body); color: var(--ink);
-  background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; padding: 4px 7px;
-  box-shadow: 0 2px 0 var(--ink);
+  background: var(--paper); border: var(--rule); border-radius: 8px; padding: 4px 7px;
+  box-shadow: var(--lift-s);
 }
 .fxtag.ride { font-variant-numeric: tabular-nums; }
 .fxtag.mark.cut { background: #ffe5e8; border-color: #e63946; color: #b3202c; }
 .fxtag.mark.block { background: #fff4d6; }
 .fxtag.mep { background: #e0f7f4; border-radius: 999px; }
-.fxtag.note { background: #eef4fb; }
+.fxtag.note { background: var(--well); }
 .fxtag.note.warn { background: #ffe5e8; color: #b3202c; border-color: #e63946; }
 .fxtag .sid { font-family: var(--display); font-weight: 400; font-size: 13px; letter-spacing: 0.04em; }
 .fxtag .stack { display: inline-flex; gap: 2px; }
@@ -219,7 +249,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .fxtag.queue { padding: 6px 8px 4px; }
 .q { display: flex; gap: 6px; align-items: flex-end; }
 .lane { display: grid; justify-items: center; gap: 3px; }
-.lane i { display: block; width: 14px; height: 10%; min-height: 3px; background: var(--c); border: 2px solid var(--ink); border-radius: 3px; align-self: end; transition: height 0.8s ease; }
+.lane i { display: block; width: 14px; height: 10%; min-height: 3px; background: var(--c); border: var(--rule); border-radius: 3px; align-self: end; transition: height 0.8s ease; }
 .lane { height: 54px; grid-template-rows: 1fr auto; }
 .lane span { font-size: 9.5px; font-weight: 800; color: var(--muted); }
 
@@ -233,7 +263,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 }
 .card .x {
   position: absolute; top: 6px; right: 8px; width: 30px; height: 30px;
-  border: 2px solid var(--ink); border-radius: 50%; background: var(--paper);
+  border: var(--rule); border-radius: 50%; background: var(--paper);
   font-size: 20px; line-height: 1; padding: 0;
 }
 .card-k { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
@@ -241,25 +271,25 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .card-layers { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip {
   font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
-  border: 2px solid var(--ink); background: var(--c);
+  border: var(--rule); background: var(--c);
 }
 .card-role { margin: 8px 0; }
-.card dl { margin: 0; padding: 8px 10px; background: #eef4fb; border-radius: 10px; }
+.card dl { margin: 0; padding: 8px 10px; background: var(--well); border-radius: var(--radius-s); }
 .card dt { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .card dd { margin: 2px 0 0; font-weight: 800; }
 .card h4 { margin: 12px 0 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .card-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .card-links button {
-  border: 2px solid var(--ink); background: var(--paper); border-radius: 8px;
+  border: var(--rule); background: var(--paper); border-radius: 8px;
   padding: 2px 8px; font-size: 12.5px; font-weight: 700;
 }
-.card-links button:hover { background: #eef4fb; }
+.card-links button:hover { background: var(--well); }
 
 .hint {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   margin: 0; padding: 4px 12px; border-radius: 999px;
-  background: rgb(29 42 68 / 0.82); color: var(--paper);
+  background: var(--hint-bg); color: var(--paper);
   font-size: 12px; font-weight: 700; white-space: nowrap;
   max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis;
 }
@@ -267,7 +297,10 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 760px) {
   .title { padding: 6px 12px 8px; }
   .title h1 { font-size: 26px; }
-  .title p { font-size: 12px; }
+  .title p { display: none; }
+  .modes { margin-top: 6px; }
+  .modes button { padding: 3px 8px; }
+  .modes span { display: none; }
   .panel {
     top: auto; left: 16px; right: 16px; width: auto;
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
@@ -291,11 +324,101 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   * { transition: none !important; animation: none !important; }
 }
 
+/* ------------------------------------------------ Engineer: a flat, dark console.
+   Same layout, different tokens: a workstation face rather than a sticker book. */
+:root[data-mode="engineer"] {
+  --ink: #0b1017;
+  --paper: #161c25;
+  --sky-1: #0b1017;
+  --sky-2: #1a222e;
+  --muted: #8b97a8;
+  --accent: #4da3ff;
+  --display: 'IBM Plex Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --body: 'IBM Plex Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --edge: #2a3442;
+  --line: 1px solid var(--edge);
+  --rule: 1px solid var(--edge);
+  --lift: 0 8px 24px rgb(0 0 0 / 0.35);
+  --lift-s: none;
+  --lift-m: none;
+  --radius: 8px;
+  --radius-s: 6px;
+  --tilt: none;
+  --well: #0f141b;
+  --sel-bg: var(--accent);
+  --sel-fg: #0b1017;
+  --sel-sub: #0b1017;
+  --hint-bg: rgb(22 28 37 / 0.9);
+  --title-stroke: 0 transparent;
+  --city-stroke: 3px #0b1017;
+  --town-stroke: 2.5px #0b1017;
+  --city-shadow: none;
+  --town-shadow: none;
+  --press: none;
+  --label-space: 0.14em;
+  color-scheme: dark;
+}
+[data-mode="engineer"] body { color: #e6ebf2; font-weight: 400; background: radial-gradient(ellipse at 50% 20%, #1a222e, #0b1017 70%); }
+[data-mode="engineer"] .title, [data-mode="engineer"] .panel, [data-mode="engineer"] .card, [data-mode="engineer"] .tech { color: #e6ebf2; }
+[data-mode="engineer"] .title h1 { font-weight: 600; font-size: 26px; letter-spacing: -0.01em; color: #e6ebf2; }
+[data-mode="engineer"] .title p, [data-mode="engineer"] .sides span, [data-mode="engineer"] .modes span, [data-mode="engineer"] .st,
+[data-mode="engineer"] .topic span, [data-mode="engineer"] .lbl.tip span, [data-mode="engineer"] .lane span { font-weight: 500; }
+[data-mode="engineer"] .nm, [data-mode="engineer"] .opts button, [data-mode="engineer"] .go, [data-mode="engineer"] .back, [data-mode="engineer"] .topic b,
+[data-mode="engineer"] .t-btns button, [data-mode="engineer"] .card dd, [data-mode="engineer"] .card-links button, [data-mode="engineer"] .hint,
+[data-mode="engineer"] .lbl.tag, [data-mode="engineer"] .fxtag, [data-mode="engineer"] .chip { font-weight: 500; }
+[data-mode="engineer"] .sides b, [data-mode="engineer"] .modes b { font-weight: 600; font-size: 14px; }
+[data-mode="engineer"] .panel h2, [data-mode="engineer"] .d-h, [data-mode="engineer"] .t-tag, [data-mode="engineer"] .card-k,
+[data-mode="engineer"] .card dt, [data-mode="engineer"] .card h4 { font: 500 11px/1 var(--mono); letter-spacing: var(--label-space); text-transform: uppercase; }
+[data-mode="engineer"] .detail h2, [data-mode="engineer"] .tech h3, [data-mode="engineer"] .card h3 { font-weight: 600; font-size: 20px; letter-spacing: -0.01em; }
+[data-mode="engineer"] .lbl.tip b { font-weight: 600; font-size: 14px; }
+[data-mode="engineer"] .lbl.city { font-weight: 600; color: #e6ebf2; letter-spacing: 0.04em; text-transform: uppercase; font-size: 12px; }
+[data-mode="engineer"] .lbl.city.big { font-size: 15px; }
+[data-mode="engineer"] .lbl.city.town { font-size: 10.5px; }
+[data-mode="engineer"] .lbl.tag { background: rgb(22 28 37 / 0.92); color: #e6ebf2; border-color: var(--edge); border-left-width: 4px; }
+[data-mode="engineer"] .fxtag { background: rgb(22 28 37 / 0.94); color: #e6ebf2; border-color: var(--edge); font-family: var(--mono); font-size: 11px; }
+[data-mode="engineer"] .fxtag .sid, [data-mode="engineer"] .fxtag .stack b { font-family: var(--mono); font-weight: 500; }
+[data-mode="engineer"] .fxtag.mark.cut, [data-mode="engineer"] .fxtag.note.warn { background: #2a1217; color: #ff8a94; border-color: #7a2a33; }
+[data-mode="engineer"] .fxtag.mark.block { background: #2a2210; color: #ffd27a; border-color: #7a6020; }
+[data-mode="engineer"] .fxtag.mep { background: #0f2a28; color: #6fe3d6; border-color: #1f6a62; }
+[data-mode="engineer"] .fxtag.note { background: #121b28; }
+[data-mode="engineer"] .fxtag .ccm { color: #6fe3d6; }
+[data-mode="engineer"] .major, [data-mode="engineer"] .topic, [data-mode="engineer"] .opts button, [data-mode="engineer"] .t-btns button,
+[data-mode="engineer"] .card-links button, [data-mode="engineer"] .x, [data-mode="engineer"] .modes button, [data-mode="engineer"] .sides button { background: var(--well); }
+[data-mode="engineer"] .major:hover, [data-mode="engineer"] .major.lit, [data-mode="engineer"] .topic:hover { background: color-mix(in srgb, var(--c) 22%, var(--well)); }
+[data-mode="engineer"] .major:active, [data-mode="engineer"] .back:active, [data-mode="engineer"] .t-btns button:active:not(:disabled) { transform: none; filter: brightness(1.15); }
+[data-mode="engineer"] .wire { height: 6px; border: 0; border-radius: 3px; }
+[data-mode="engineer"] .wire::after { display: none; }
+[data-mode="engineer"] .wire.dashed { background: repeating-linear-gradient(90deg, var(--c) 0 6px, transparent 6px 10px); }
+[data-mode="engineer"] .go { background: transparent; color: var(--accent); border-color: var(--edge); }
+[data-mode="engineer"] .chip { color: #0b1017; border-color: transparent; }
+[data-mode="engineer"] .back { background: var(--accent); color: #0b1017; border-color: transparent; }
+[data-mode="engineer"] .t-btns .primary { background: var(--accent); color: #0b1017; border-color: transparent; }
+[data-mode="engineer"] .topic[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 35%, var(--well)); color: #e6ebf2; border-color: var(--c); transform: none; }
+[data-mode="engineer"] .topic[aria-pressed="true"] span { color: #c7d0dc; }
+[data-mode="engineer"] .dots i { border-color: var(--edge); background: var(--well); }
+[data-mode="engineer"] .detail, [data-mode="engineer"] .tech, [data-mode="engineer"] .card { border-top-width: 3px; }
+[data-mode="engineer"] .lbl.tip { border-top-width: 3px; }
+[data-mode="engineer"] .card-links button:hover { background: #1b2430; }
+[data-mode="engineer"] .d-stats, [data-mode="engineer"] .st { font-family: var(--mono); font-size: 11px; }
+/* pressed states and the few places the base rules name --ink or --paper directly */
+[data-mode="engineer"] .modes button[aria-pressed="true"], [data-mode="engineer"] .sides button[aria-pressed="true"],
+[data-mode="engineer"] .opts button[aria-pressed="true"] { background: var(--accent); color: #0b1017; border-color: var(--accent); }
+[data-mode="engineer"] .modes button[aria-pressed="true"] span, [data-mode="engineer"] .sides button[aria-pressed="true"] span { color: #0b1017; }
+[data-mode="engineer"] .detail h2 { font: 600 20px/1.15 var(--body); letter-spacing: -0.01em; text-transform: none; color: #e6ebf2; }
+[data-mode="engineer"] .hint { color: #e6ebf2; border: 1px solid var(--edge); }
+[data-mode="engineer"] .x { color: #e6ebf2; }
+[data-mode="engineer"] .t-btns button:disabled { opacity: 0.35; }
+
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js" } }
 </script>
 <!--HUD-->
+<script>
+// Pick the saved reading mode before anything paints, so the theme never flashes.
+try { const m = localStorage.getItem('netlandia.mode'); if (m === 'explorer' || m === 'engineer') document.documentElement.dataset.mode = m; } catch {}
+</script>
 <div id="app">
   <canvas id="view" aria-label="3D map of Netlandia's networks"></canvas>
   <div id="labels" aria-hidden="true"></div>
@@ -304,7 +427,11 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
   <header class="title">
     <h1>Netlandia</h1>
-    <p>Transport on one side, the data network on the other</p>
+    <p id="subtitle">Transport on one side, the data network on the other</p>
+    <div class="modes" role="group" aria-label="Reading mode">
+      <button data-mode="explorer" aria-pressed="true" title="Learn how networks work, in plain words"><b>Explorer</b><span>the basics</span></button>
+      <button data-mode="engineer" aria-pressed="false" title="The full picture, with the real terminology"><b>Engineer</b><span>full detail</span></button>
+    </div>
   </header>
 
   <nav id="panel" class="panel" aria-label="Networks">
@@ -327,7 +454,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <p id="d-stats" class="d-stats"></p>
     <p id="d-blurb"></p>
     <div id="d-layers" class="d-layers"></div>
-    <h3 class="d-h">Explore the technology</h3>
+    <h3 class="d-h" id="d-tech-h">Explore the technology</h3>
     <div id="d-topics" class="topics"></div>
   </section>
 
@@ -351,7 +478,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <h3 class="card-t"></h3>
     <div class="card-layers"></div>
     <p class="card-role"></p>
-    <dl><dt>Equipment</dt><dd class="card-gear"></dd></dl>
+    <dl><dt class="card-gear-h">Equipment</dt><dd class="card-gear"></dd></dl>
     <h4 class="card-links-h">Connects to</h4>
     <ul class="card-links"></ul>
   </aside>
@@ -1838,7 +1965,7 @@ function buildDetail(world, part) {
   scene.add(floor);
   }
 
-  const movers = [];
+  const movers = [], toys = [];
   if (sphere) {
     // The sea: a sandy floor, a translucent surface above the network, and whales.
     // deep water behind, a sandy floor under the cables, sunlight filtering down
@@ -1873,6 +2000,7 @@ function buildDetail(world, part) {
     [[0.25, 0.9, 1.0], [-0.4, 0.7, 1.3], [0.9, -0.3, 0.8]].forEach(([ax, az, sc], i) => {
       const w = whale(sc * space.k * 0.9);
       scene.add(w);
+      toys.push(w);
       const axis = new THREE.Vector3(ax, 1, az).normalize();
       const u0 = new THREE.Vector3().crossVectors(axis, Y).normalize();
       const v0 = new THREE.Vector3().crossVectors(axis, u0).normalize();
@@ -1962,7 +2090,7 @@ function buildDetail(world, part) {
 
   const fx = buildFx({ scene, nodes, links, nodeObjs, linkObjs, space });
   fxRef = fx;
-  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir, fx };
+  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir, fx, toys };
 }
 
 // ---------------------------------------------------------------- effects
@@ -2054,12 +2182,13 @@ function buildFx({ scene, nodes, links, nodeObjs, linkObjs, space }) {
     return a;
   }
 
-  // a cut or a block marker on the middle of a link
+  // a cut or a block marker on the middle of a link; the words come from `fx.words`
+  // so the beginner and the engineer read it in their own vocabulary
   function marker(linkId, kind) {
     const o = linkObjs[linkId];
     const mid = o.table[Math.floor(o.table.length / 2)].clone();
     if (kind === 'cut') linkState(linkId, 'cut');
-    return anchor(kind === 'cut' ? '<b>✕</b> fibre cut' : '<b>▮</b> RPL blocked', mid, 'mark ' + kind);
+    return anchor(kind === 'cut' ? `<b>✕</b> ${fx.words.cut}` : `<b>▮</b> ${fx.words.block}`, mid, 'mark ' + kind);
   }
 
   // a packet running along a path of sites; `tag` is HTML that rides with it
@@ -2129,7 +2258,8 @@ function buildFx({ scene, nodes, links, nodeObjs, linkObjs, space }) {
     }
   }
 
-  return { byId, link, linksOf, path, pathLinks, nodePos, linkState, focus, spot, anchor, marker, packet, queue, clear, update, anchors };
+  const fx = { byId, link, linksOf, path, pathLinks, nodePos, linkState, focus, spot, anchor, marker, packet, queue, clear, update, anchors, words: { cut: 'fibre cut', block: 'RPL blocked' } };
+  return fx;
 }
 
 
@@ -2471,6 +2601,450 @@ export class TechPlayer {
   close() { this.fx.clear(); this.topic = null; }
 }
 
+// Explorer-mode explainers: an introduction to networking told on the same six
+// networks. No acronyms unless the step is there to introduce one. Same shape as
+// TOPICS in tech.js, so the same player, the same effects and the same tests apply.
+
+const OPTICAL = 'Optical transport';
+const PACKETS = 'Packet networking';
+const COLOURS = [TC.wave, TC.wave2, TC.wave3];
+
+// Three beams of different colours running one path.
+const rainbow = (fx, ids, tags = ['orange beam', 'purple beam', 'teal beam'], speed = 12) =>
+  COLOURS.forEach((c, i) => fx.packet(ids, { color: c, speed, delay: i * 0.8, tag: tags[i] }));
+
+const BASICS = {
+  longhaul: [
+    {
+      id: 'light', name: 'Data travels as light', tag: OPTICAL,
+      summary: 'Every line on this map is a glass fibre, and the data inside it is a beam of light.',
+      steps: [
+        {
+          say: 'Each line here is a glass fibre thinner than a hair, buried between the towns. Information does not travel through it as electricity: it travels as flashes of light, millions of them every second.',
+          run: (fx) => fx.focus(fx.linksOf()),
+        },
+        {
+          say: 'Watch one message leave Prismfield as a beam of light and ride the glass all the way to Lumen City. It never stops to be turned back into electricity on the way.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('bb_oak', 'hub_n')); fx.packet(ids, { color: TC.wave, speed: 12, tag: 'a beam of light' }); },
+        },
+        {
+          say: 'Light gets dimmer the further it goes. Every 80 km or so a small hut gives the beam a boost, like a relay runner handing on the baton, so it arrives bright enough to read.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('bb_oak', 'hub_n')); for (const id of ofType(fx, 'ila')) fx.spot(id, TC.red); fx.packet(ids, { color: TC.wave, speed: 12 }); },
+        },
+      ],
+    },
+    {
+      id: 'colours', name: 'Many colours in one fibre', tag: 'DWDM, in plain words',
+      summary: 'One fibre carries many beams at once, as long as each one is a different colour.',
+      steps: [
+        {
+          say: 'One fibre can carry many beams at the same time, as long as each beam is a different colour of light. Think of lanes on a road: the orange lane, the purple lane and the teal lane never get in each other’s way.',
+          run: (fx) => rainbow(fx, glowPath(fx, fx.path('bb_oak', 'hub_n'))),
+        },
+        {
+          say: 'Engineers call this DWDM, dense wavelength division multiplexing. “Wavelength” is just the scientific word for a colour, and “multiplexing” means sharing. Dozens of colours can share one strand of glass.',
+          run: (fx) => rainbow(fx, glowPath(fx, fx.path('bb_oak', 'hub_n')), ['colour 1', 'colour 2', 'colour 3'], 14),
+        },
+        {
+          say: 'At a junction a filter sorts the colours out again, like a prism splitting sunlight into a rainbow. The orange beam can be sent on toward Glassbridge while the purple one turns south to Spectraville.',
+          run: (fx) => {
+            fx.spot('bb_junc', TC.red);
+            fx.focus([fx.link('bb_junc', 'bb_stone'), fx.link('bb_junc', 'bb_south')]);
+            fx.packet(['bb_junc', 'bb_stone'], { color: TC.wave, speed: 10, tag: 'orange → east' });
+            fx.packet(['bb_junc', 'bb_south'], { color: TC.wave2, speed: 10, delay: 0.8, tag: 'purple → south' });
+          },
+        },
+      ],
+    },
+    {
+      id: 'break', name: 'When a cable breaks', tag: OPTICAL,
+      summary: 'A digger cuts a fibre. The light finds another road.',
+      steps: [
+        {
+          say: 'A message from Prismfield to Lumen City normally takes the short road: through Crosspoint and Glassbridge.',
+          run: (fx) => { const ids = glowPath(fx, ['bb_oak', 'bb_junc', 'bb_stone', 'hub_w']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
+        },
+        {
+          say: 'A digger working on the road between Crosspoint and Glassbridge cuts straight through the fibre. The light stops dead.',
+          run: (fx) => { glowPath(fx, ['bb_oak', 'bb_junc']); fx.marker(fx.link('bb_junc', 'bb_stone'), 'cut'); fx.packet(['bb_oak', 'bb_junc'], { color: TC.wave, speed: 12 }); },
+        },
+        {
+          say: 'Every junction has at least three roads out, so the network steers the beam round the break instead: down through Spectraville and Beambrook. It takes a little longer, but it gets there.',
+          run: (fx) => { const cut = fx.link('bb_junc', 'bb_stone'); const ids = glowPath(fx, fx.path('bb_oak', 'hub_w', [cut])); fx.marker(cut, 'cut'); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
+        },
+        {
+          say: 'Once the fibre is mended, the light goes back to the short road.',
+          run: (fx) => { const ids = glowPath(fx, ['bb_oak', 'bb_junc', 'bb_stone', 'hub_w']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
+        },
+      ],
+    },
+  ],
+
+  metro: [
+    {
+      id: 'ring', name: 'Why a loop?', tag: OPTICAL,
+      summary: 'Join the hubs in a circle and every one can be reached two ways round.',
+      steps: [
+        {
+          say: 'The four city hubs are joined in a loop of fibre. In a loop, every hub can reach every other hub in two directions: clockwise or anticlockwise.',
+          run: (fx) => { fx.focus([fx.link('hub_n', 'hub_e'), fx.link('hub_e', 'hub_s'), fx.link('hub_s', 'hub_w'), fx.link('hub_w', 'hub_n')]); for (const h of ['hub_n', 'hub_e', 'hub_s', 'hub_w']) fx.spot(h, '#14b8a6'); },
+        },
+        {
+          say: 'A beam from the West hub to the East hub takes the short way round, passing straight through North without stopping.',
+          run: (fx) => { const ids = glowPath(fx, ['hub_w', 'hub_n', 'hub_e']); fx.spot('hub_w', '#14b8a6'); fx.spot('hub_e', '#14b8a6'); fx.packet(ids, { color: TC.wave, speed: 12, tag: 'West → East' }); },
+        },
+        {
+          say: 'The fibre between North and East is cut. The beam simply goes the other way round the loop, through South, in less than the blink of an eye. Nobody in the city notices.',
+          run: (fx) => { fx.marker(fx.link('hub_n', 'hub_e'), 'cut'); const ids = glowPath(fx, ['hub_w', 'hub_s', 'hub_e']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.4 }); },
+        },
+      ],
+    },
+    {
+      id: 'dc', name: 'Data centers talk to each other', tag: OPTICAL,
+      summary: 'The big computer buildings have private fibres of their own.',
+      steps: [
+        {
+          say: 'The four data centers are the buildings where websites, videos and games live. They copy huge amounts of data between each other all day, so they have their own private loop of fibre.',
+          run: (fx) => { const ring = ['dc_nw', 'dc_ne', 'dc_se', 'dc_sw', 'dc_nw']; glowPath(fx, ring); fx.packet(ring, { color: TC.wave2, speed: 14 }); fx.packet([...ring].reverse(), { color: TC.wave2, speed: 14, delay: 0.8 }); },
+        },
+        {
+          say: 'The harbour data center is next to the beach cable station, so a data center on the other side of the ocean is just one more stop along the fibre.',
+          run: (fx) => { const ids = glowPath(fx, ['dc_nw', 'dc_ne', 'dc_se', 'cls_port']); fx.spot('cls_port', '#ffc300'); fx.packet(ids, { color: TC.wave2, speed: 14, tag: 'to the undersea cable' }); },
+        },
+      ],
+    },
+  ],
+
+  submarine: [
+    {
+      id: 'ocean', name: 'How light crosses an ocean', tag: OPTICAL,
+      summary: 'A cable on the sea floor, with boosters along it, joins the two countries.',
+      steps: [
+        {
+          say: 'An undersea cable is a bundle of glass fibres wrapped in plastic and steel, about as thick as a garden hose. A ship lays it on the sea floor from one beach to the other.',
+          run: (fx) => { const ids = glowPath(fx, ['cls_port', 'cls_south']); fx.spot('cls_port', '#ffc300'); fx.spot('cls_south', '#ffc300'); fx.packet(ids, { color: TC.wave, speed: 24, tag: 'across the ocean' }); },
+        },
+        {
+          say: 'Light fades on the way, so every 60 to 80 km a booster lying on the seabed gives it a push. Electricity for the boosters comes down a copper wire inside the cable from the station on the beach.',
+          run: (fx) => { const ids = glowPath(fx, ['cls_port', 'cls_south']); for (const id of Object.keys(fx.byId).filter((x) => x.startsWith('rep_cls_port_cls_south'))) fx.spot(id, '#ffc300'); fx.packet(ids, { color: TC.wave, speed: 24 }); },
+        },
+        {
+          say: 'Like any fibre, the cable carries many colours at once. The company that owns it can rent some colours to other companies, who send their own light down the same glass.',
+          run: (fx) => rainbow(fx, glowPath(fx, ['cls_port', 'cls_isla_w']), ['owner', 'renter A', 'renter B'], 18),
+        },
+      ],
+    },
+  ],
+
+  ipcore: [
+    {
+      id: 'packet', name: 'What is a packet?', tag: PACKETS,
+      summary: 'Big things are chopped into small pieces, and each piece carries its address.',
+      steps: [
+        {
+          say: 'A photo or a video is far too big to send in one go. So it is chopped into small pieces called packets, and every packet carries the address it is going to, like a parcel with a label.',
+          run: (fx) => { for (const id of ['cr_gw', 'cr_c1', 'cr_c2', 'cr_north', 'cr_edge', 'cr_south']) fx.spot(id, TC.biz); fx.packet(['cr_gw', 'cr_c1'], { color: TC.biz, speed: 6, tag: '📦 to Edgewater' }); },
+        },
+        {
+          say: 'A router is a sorting office. It reads the label on each packet and passes it to the next router in the right direction. Gateway Bay sends this one through the two Coreburg routers toward Edgewater.',
+          run: (fx) => { const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge']); for (const id of ids) fx.anchor('<b>sort</b> → next hop', fx.nodePos(id, 6.5), 'note'); fx.packet(ids, { color: TC.biz, speed: 8, tag: '📦 to Edgewater' }); },
+        },
+        {
+          say: 'Different packets from the same video can take different roads and arrive out of order. The computer at the far end puts the pieces back together before you see a single frame.',
+          run: (fx) => {
+            fx.focus([...fx.pathLinks(['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge']), ...fx.pathLinks(['cr_gw', 'cr_north', 'cr_edge'])]);
+            fx.packet(['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge'], { color: TC.biz, speed: 10, tag: 'piece 1' });
+            fx.packet(['cr_gw', 'cr_north', 'cr_edge'], { color: TC.video, speed: 10, delay: 0.4, tag: 'piece 2' });
+            fx.packet(['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge'], { color: TC.wave3, speed: 10, delay: 0.8, tag: 'piece 3' });
+          },
+        },
+      ],
+    },
+    {
+      id: 'reroute', name: 'Finding another way', tag: PACKETS,
+      summary: 'A link fails and the routers send the packets round another road.',
+      steps: [
+        {
+          say: 'Every main router has at least three neighbours. Packets from Gateway Bay to Edgewater normally go through the pair of routers in Coreburg.',
+          run: (fx) => { const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge']); fx.packet(ids, { color: TC.biz, speed: 12 }); fx.packet(ids, { color: TC.biz, speed: 12, delay: 1.2 }); },
+        },
+        {
+          say: 'The link between the two Coreburg routers fails. Within a blink, the first router starts sending the packets up through Northport instead. Your video keeps playing.',
+          run: (fx) => { fx.marker(fx.link('cr_c1', 'cr_c2'), 'cut'); const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_north', 'cr_edge']); fx.spot('cr_c1', TC.red); fx.packet(ids, { color: TC.biz, speed: 11 }); fx.packet(ids, { color: TC.biz, speed: 11, delay: 1.2 }); },
+        },
+        {
+          say: 'A moment later all the routers have agreed on the new best road, straight through Northport, until the broken link is repaired.',
+          run: (fx) => { fx.marker(fx.link('cr_c1', 'cr_c2'), 'cut'); const ids = glowPath(fx, ['cr_gw', 'cr_north', 'cr_edge']); fx.packet(ids, { color: TC.biz, speed: 12 }); fx.packet(ids, { color: TC.biz, speed: 12, delay: 1.2 }); },
+        },
+      ],
+    },
+  ],
+
+  aggregation: [
+    {
+      id: 'share', name: 'Sharing one road', tag: PACKETS,
+      summary: 'A bank, an office, a hospital and a school all ride the same loop into the city.',
+      steps: [
+        {
+          say: 'A bank branch has a small box that joins it to the network. Its packets ride a loop of fibre, shared with the neighbours, to a collector router and on to the main routers in the city.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('end_0_1', 'cr_c2')); fx.spot('end_0_1', '#ff4fa3'); fx.packet(ids, { color: '#ff4fa3', speed: 10, tag: 'from the bank' }); fx.packet([...ids].reverse(), { color: '#ff4fa3', speed: 10, delay: 1, tag: 'to the bank' }); },
+        },
+        {
+          say: 'Sharing is what makes it affordable. Nobody gets their own fibre all the way to the city; the clever, expensive routers sit in the middle where everyone uses them.',
+          run: (fx) => { for (const id of Object.keys(fx.byId).filter((x) => x.startsWith('end_'))) fx.spot(id, '#ff4fa3'); fx.focus(fx.linksOf('access')); },
+        },
+      ],
+    },
+    {
+      id: 'first', name: 'Who goes first?', tag: PACKETS,
+      summary: 'Phone calls, video and web pages share one link. Not all of them can wait.',
+      steps: [
+        {
+          say: 'Phone calls, video, work files and ordinary web browsing all share one link from the East collector into the city. Each kind of traffic waits in its own queue.',
+          run: (fx) => { fx.queue('ag_e', [{ name: 'Calls', color: TC.voice, fill: 0.2 }, { name: 'Video', color: TC.video, fill: 0.3 }, { name: 'Work', color: TC.biz, fill: 0.35 }, { name: 'Web', color: TC.best, fill: 0.4 }]); const ids = glowPath(fx, ['ag_e', 'cr_c2']); [TC.voice, TC.video, TC.biz, TC.best].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.5, size: 0.45 })); fx.spot('ag_e', TC.frame); },
+        },
+        {
+          say: 'When the link is busy, phone calls go first: a delayed voice sounds broken. A web page can wait a moment and nobody minds. If something has to be dropped, it is the web queue.',
+          run: (fx) => { fx.queue('ag_e', [{ name: 'Calls', color: TC.voice, fill: 0.1 }, { name: 'Video', color: TC.video, fill: 0.45 }, { name: 'Work', color: TC.biz, fill: 0.6 }, { name: 'Web', color: TC.best, fill: 0.98 }]); const ids = glowPath(fx, ['ag_e', 'cr_c2']); [TC.voice, TC.voice, TC.video, TC.biz].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.45, size: 0.45 })); fx.anchor('<b>web waits</b>', fx.nodePos('ag_e', 3.5), 'note warn'); },
+        },
+      ],
+    },
+    {
+      id: 'heartbeat', name: 'Is it still working?', tag: PACKETS,
+      summary: 'The two ends keep asking each other “are you there?”',
+      steps: [
+        {
+          say: 'The bank’s box and the collector router send each other a tiny “are you there?” message ten times a second. As long as the answers keep coming, the link is known to be fine.',
+          run: (fx) => ccm(fx, 'end_0_1', 'ag_e'),
+        },
+        {
+          say: 'The fibre to the bank is cut. After three missed messages the router raises an alarm, so the engineers know about the problem before the bank has even picked up the phone.',
+          run: (fx) => { const ids = fx.path('end_0_1', 'ag_e'); fx.focus(fx.pathLinks(ids)); fx.marker(fx.link(ids[0], ids[1]), 'cut'); fx.anchor('<b>alarm</b> bank unreachable', fx.nodePos('ag_e', 6), 'note warn'); fx.spot('ag_e', TC.red); },
+        },
+      ],
+    },
+  ],
+
+  xhaul: [
+    {
+      id: 'call', name: 'Your phone call’s journey', tag: PACKETS,
+      summary: 'Radio to the tower, then packets on a fibre, then the rest of the internet.',
+      steps: [
+        {
+          say: 'Your phone talks by radio to the nearest tower. At the foot of the tower a small router turns your call into packets and sends them down a fibre.',
+          run: (fx) => { const ids = glowPath(fx, ['end_3_0', 'xh_bright']); fx.spot('end_3_0', '#00a6d6'); fx.packet(ids, { color: TC.voice, speed: 10, tag: '📞 your call' }); },
+        },
+        {
+          say: 'The towers sit on a loop of fibre round the countryside. The packets ride the loop to a main router, then on to the mobile network’s control center and the rest of the internet.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('end_3_0', 'cr_gw')); fx.spot('cr_gw', TC.biz); fx.packet(ids, { color: TC.voice, speed: 14, tag: '📞 to the internet' }); },
+        },
+        {
+          say: 'The radio part of your call cannot wait even a thousandth of a second, so at every tower it jumps the queue ahead of everything else.',
+          run: (fx) => { fx.queue('xh_bright', [{ name: 'Radio', color: TC.voice, fill: 0.1 }, { name: 'Clock', color: TC.video, fill: 0.05 }, { name: 'Calls', color: TC.biz, fill: 0.55 }, { name: 'Data', color: TC.best, fill: 0.95 }]); const ids = glowPath(fx, ['end_3_0', 'xh_bright']); [TC.voice, TC.voice, TC.voice, TC.best].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.4, size: 0.45 })); },
+        },
+      ],
+    },
+    {
+      id: 'twoways', name: 'Two ways out', tag: PACKETS,
+      summary: 'The loop of towers joins the core in two places, so a cut never takes a tower off air.',
+      steps: [
+        {
+          say: 'The loop of towers joins the main routers in two places: Gateway Bay and Edgewater. One link on the loop is kept closed on purpose so packets cannot go round and round for ever.',
+          run: (fx) => { fx.focus(fx.linksOf()); fx.marker(fx.link('xh_leaf', 'end_7_0'), 'block'); const ids = fx.path('xh_south', 'cr_edge', [fx.link('xh_leaf', 'end_7_0')]); fx.packet(ids, { color: '#00a6d6', speed: 14 }); fx.packet(ids, { color: '#00a6d6', speed: 14, delay: 1.5 }); },
+        },
+        {
+          say: 'A fibre east of Spinehill is cut. The closed link opens, and the towers in the south swing round to Gateway Bay instead. Every phone keeps working.',
+          run: (fx) => { const cut = fx.link('xh_spine', 'end_4_0'); fx.marker(cut, 'cut'); const ids = fx.path('xh_south', 'cr_gw', [cut]); glowPath(fx, ids); fx.packet(ids, { color: '#00a6d6', speed: 14 }); fx.packet(ids, { color: '#00a6d6', speed: 14, delay: 1.5 }); },
+        },
+      ],
+    },
+  ],
+};
+
+// The two ways of reading the map. Explorer is an introduction to networking: the
+// same places and the same gear, described without the trade's acronyms. Engineer
+// is the map as an operator would label it. Everything the HUD prints goes through
+// `vocab(mode)`, so the two never drift apart in the code that renders them.
+
+const MODES = [
+  { id: 'explorer', name: 'Explorer', tagline: 'Learn how networks work, in plain words' },
+  { id: 'engineer', name: 'Engineer', tagline: 'The full picture, with the real terminology' },
+];
+const DEFAULT_MODE = 'explorer';
+
+// ---------------------------------------------------------------- plain words
+
+const SIDE_PLAIN = [
+  { name: 'Light and cables', blurb: 'Where data travels as light through glass' },
+  { name: 'Packets and routers', blurb: 'Where data travels as packets between routers' },
+];
+
+const LAYER_PLAIN = {
+  submarine: { name: 'Undersea cables', short: 'Undersea' },
+  backbone: { name: 'Countrywide light highway', short: 'Light highway' },
+  metro: { name: 'City light ring', short: 'City ring' },
+  dci: { name: 'Data center links', short: 'DC links' },
+  regional: { name: 'Town rings', short: 'Town rings' },
+  ipcore: { name: 'Internet core', short: 'Core' },
+  agg: { name: 'City collector ring', short: 'Collector ring' },
+  access: { name: 'Business connections', short: 'Business' },
+  xhaul: { name: 'Mobile phone network', short: 'Mobile' },
+};
+
+const MAJOR_PLAIN = {
+  submarine: {
+    name: 'Undersea cables',
+    blurb: 'Cables lying on the sea floor join the two countries. Light runs through them, and little boosters along the seabed keep it bright all the way across the ocean.',
+    place: 'The strait, Coherent Isle and the ocean, all the way round',
+  },
+  longhaul: {
+    name: 'Countrywide light highway',
+    blurb: 'Glass fibres run between the towns, and the data in them travels as light. Where fibres meet, a station steers each beam onto the right road, so there is always more than one way to get anywhere.',
+    place: 'The Wavelands, between the fibre towns',
+  },
+  metro: {
+    name: 'Lumen City light ring',
+    blurb: 'Downtown, four hubs are joined in a loop of fibre, and the big computer buildings have a loop of their own. A loop means every place can be reached two ways round.',
+    place: 'Lumen City and its data centers',
+  },
+  ipcore: {
+    name: 'Internet core',
+    blurb: 'Six big routers pass packets across the country, each with several neighbours so there is always another road. One sits beside the place where other networks meet ours, and two serve the cloud and the mobile network.',
+    place: 'The two main routers in Coreburg and the four corner towns',
+  },
+  aggregation: {
+    name: 'Coreburg city network',
+    blurb: 'A loop of fibre round the city gathers up the packets from banks, offices, a hospital and a school, and carries them into the big routers in the middle.',
+    place: 'The loop round downtown Coreburg',
+  },
+  xhaul: {
+    name: 'Mobile phone network',
+    blurb: 'Phone towers out in the countryside turn radio from your phone into packets, and a loop of fibre carries them to the mobile network’s control center and on to the internet.',
+    place: 'The loop of phone towers round the countryside',
+  },
+};
+
+// What each kind of site is, as a label and as a sentence.
+const TYPE_PLAIN = {
+  dc: ['Data center', 'A building full of computers that hold websites, videos, games and apps.'],
+  pop: ['Light junction', 'Where beams of light are steered from one fibre onto another, without ever being turned back into electricity.'],
+  hub: ['City hub', 'A hub on the city ring, where the countrywide fibres meet the city’s own loop.'],
+  regional: ['Town hut', 'A small building where a town joins the ring of fibre running past it.'],
+  ila: ['Booster hut', 'Light fades on a long run of fibre. This hut gives it a boost so it reaches the next town.'],
+  cls: ['Beach cable station', 'Where an undersea cable comes ashore and plugs into the fibres on land.'],
+  repeater: ['Undersea booster', 'A booster lying on the seabed, powered through a copper wire inside the cable.'],
+  core: ['Main router', 'A big router that reads the address on every packet and passes it toward its destination.'],
+  agg: ['Collector router', 'Gathers packets from many customers and hands them to the main routers.'],
+  xhub: ['Tower collector', 'Collects the packets from the phone towers on its stretch of the loop.'],
+  ixp: ['Internet meeting point', 'Where this network plugs into other networks, so packets can reach the rest of the internet.'],
+  access: ['Customer site', 'A place that connects to the network.'],
+  bank: ['Bank branch', 'A bank branch with a small box that joins it to the city network.'],
+  office: ['Office', 'An office building joined to the city network.'],
+  hospital: ['Hospital', 'A hospital, connected two ways so it never loses its link.'],
+  school: ['School', 'A school joined to the city network.'],
+  tower: ['Phone tower', 'Talks to the phones nearby by radio and turns their calls and data into packets on a fibre.'],
+  factory: ['Factory', 'A factory joined to the city network.'],
+  hotel: ['Hotel', 'A hotel joined to the city network.'],
+};
+
+// What is inside, without the part numbers.
+const GEAR_PLAIN = {
+  dc: 'Racks of computers, and boxes that turn their data into light for the fibres',
+  pop: 'A box of tiny mirrors and filters that steers each colour of light',
+  hub: 'Light-steering boxes for the city ring and the countrywide fibres',
+  regional: 'A box that drops the town’s light off the ring and adds it back',
+  ila: 'An amplifier that makes the light brighter without reading it',
+  cls: 'The end of the undersea cable, and the power feed for its boosters',
+  repeater: 'An amplifier in a pressure-proof case',
+  core: 'A very fast router that can handle millions of packets a second',
+  agg: 'A router that merges many customers’ packets onto one fibre',
+  xhub: 'A router built for phone towers, with a very accurate clock',
+  ixp: 'Routers belonging to many different networks, plugged into each other',
+  tower: 'A small, tough router at the foot of the mast',
+  endpoint: 'A small box that connects the building to the network',
+};
+
+// A site's name with the trade words swapped out.
+const NAME_PLAIN = [
+  [/ ROADM$/, ' light junction'],
+  [/ pre-aggregation$/, ' tower collector'],
+  [/ aggregation$/, ' collector'],
+  [/ Central Office$/, ' exchange'],
+  [/ DC /, ' data center '],
+  [/ DC$/, ' data center'],
+  [/ 5G Core$/, ' mobile control center'],
+  [/ Internet Exchange$/, ' internet meeting point'],
+  [/ Landing Station$/, ' cable station'],
+  [/ core$/, ' main router'],
+  [/\bAmplifier hut\b/, 'Booster hut'],
+  [/\bRepeater\b/, 'Booster'],
+];
+
+// ---------------------------------------------------------------- the vocabulary
+
+const ENGINEER_TYPES = {
+  dc: 'Data center', pop: 'RLS ROADM site', hub: 'Metro hub', regional: 'Regional ring hut', ila: 'RLS amplifier hut',
+  cls: 'Cable landing station', repeater: 'Undersea repeater', core: 'Core router', agg: 'Aggregation router',
+  xhub: '5G pre-aggregation hub', ixp: 'Internet exchange', access: 'Access node',
+  ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
+};
+
+// The counts each network's one-line summary is built from; the words differ by mode.
+const STAT_WORDS = {
+  engineer: {
+    submarine: ['cables', 'landing stations', 'repeaters'],
+    longhaul: ['ROADMs', 'amplifier huts'],
+    metro: ['metro hubs', 'data centers'],
+    ipcore: ['core routers', 'data centers', 'internet exchange'],
+    aggregation: ['aggregation routers', 'business customers'],
+    xhaul: ['hubs', 'cell sites'],
+  },
+  explorer: {
+    submarine: ['cables', 'beach stations', 'undersea boosters'],
+    longhaul: ['light junctions', 'booster huts'],
+    metro: ['city hubs', 'data centers'],
+    ipcore: ['main routers', 'data centers', 'internet meeting point'],
+    aggregation: ['collector routers', 'customers'],
+    xhaul: ['tower collectors', 'phone towers'],
+  },
+};
+
+function vocab(mode) {
+  const plain = mode === 'explorer';
+  const w = STAT_WORDS[plain ? 'explorer' : 'engineer'];
+  return {
+    mode, plain,
+    subtitle: plain ? 'Light and cables on one side, packets and routers on the other' : 'Transport on one side, the data network on the other',
+    sideName: (s) => (plain ? SIDE_PLAIN[s].name : SIDES[s].name),
+    sideHeading: (s) => `${SIDES[s].land} · ${(plain ? SIDE_PLAIN[s].name : SIDES[s].name).toLowerCase()}`,
+    layerName: (id) => (plain ? LAYER_PLAIN[id].name : LAYER[id].name),
+    layerShort: (id) => (plain ? LAYER_PLAIN[id].short : LAYER[id].short),
+    majorName: (id) => (plain ? MAJOR_PLAIN[id].name : MAJOR[id].name),
+    majorBlurb: (id) => (plain ? MAJOR_PLAIN[id].blurb : MAJOR[id].blurb),
+    majorPlace: (id) => (plain ? MAJOR_PLAIN[id].place : MAJOR[id].place),
+    // counts in the order STAT_WORDS lists them; a count of 1 reads "1 internet exchange"
+    stats: (id, counts) => counts.map((c, i) => `${c} ${w[id][i]}`).join(' · '),
+    typeLabel: (type) => (plain ? TYPE_PLAIN[type]?.[0] : ENGINEER_TYPES[type]) ?? type,
+    nodeName: (n) => (plain ? NAME_PLAIN.reduce((s, [re, to]) => s.replace(re, to), n.name) : n.name),
+    nodeRole: (n) => (plain ? TYPE_PLAIN[n.type]?.[1] ?? '' : n.role ?? ''),
+    nodeGear: (n) => (plain ? GEAR_PLAIN[n.type] ?? (ENDPOINT[n.type] ? GEAR_PLAIN.endpoint : '') : n.gear ?? ''),
+    gearHeading: plain ? 'What is inside' : 'Equipment',
+    techHeading: plain ? 'Learn how it works' : 'Explore the technology',
+    hints: {
+      globe: plain
+        ? 'Drag to spin the planet · Scroll or pinch to zoom · Click a part of the country to see its network'
+        : 'Drag to spin the planet · Scroll or pinch to zoom · Click a part of the country to open its network',
+      detail: plain
+        ? 'Drag to turn · Right-drag or two fingers to pan · Scroll or pinch to zoom · Click anything to find out what it is'
+        : 'Drag to turn · Right-drag or two fingers to pan · Scroll or pinch to zoom · Click a site',
+    },
+    cutLabel: plain ? 'cable cut' : 'fibre cut',
+    blockLabel: plain ? 'closed on purpose' : 'RPL blocked',
+  };
+}
+
+const PLAIN = { SIDE_PLAIN, LAYER_PLAIN, MAJOR_PLAIN, TYPE_PLAIN, GEAR_PLAIN };
+
 
 const world = buildWorld();
 const parts = majorParts(world);
@@ -2481,6 +3055,17 @@ for (const m of MAJORS) for (const id of parts[m.id].nodes) majorOfNode[id] ??= 
 for (const n of world.nodes) majorOfNode[n.id] = regionAt(n.x, n.z, n.side) ?? majorOfNode[n.id];
 const $ = (s) => document.querySelector(s);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------------------------------------------------------- reading mode
+//
+// Explorer reads the map as an introduction to networking, in plain words, with its
+// own explainers; Engineer reads it with the trade's terminology and a quieter look.
+// Every string the HUD prints comes from `V`, so switching re-renders whatever is open.
+const MODE_KEY = 'netlandia.mode';
+let modeId = (() => { try { return localStorage.getItem(MODE_KEY); } catch { return null; } })();
+if (!MODES.some((m) => m.id === modeId)) modeId = document.documentElement.dataset.mode || DEFAULT_MODE;
+let V = vocab(modeId);
+const topicsOf = (id) => (V.plain ? BASICS : TOPICS)[id];
 
 // ---------------------------------------------------------------- renderer
 
@@ -2730,47 +3315,40 @@ function stepFlight(now) {
 }
 const height = () => rig.position.length() - R;
 
-const TYPE_LABEL = {
-  dc: 'Data center', pop: 'RLS ROADM site', hub: 'Metro hub', regional: 'Regional ring hut', ila: 'RLS amplifier hut',
-  cls: 'Cable landing station', repeater: 'Undersea repeater', core: 'Core router', agg: 'Aggregation router',
-  xhub: '5G pre-aggregation hub', ixp: 'Internet exchange',
-  access: 'Access node', ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
-};
-
-
+// The counts behind each network's one-line summary; the words come from the mode.
 function majorStats(id) {
   const ns = parts[id].nodes.map((n) => world.byId[n]);
   const c = (pred) => ns.filter(pred).length;
-  switch (id) {
-    case 'submarine': return `${parts[id].links.length} cables · ${c((n) => n.type === 'cls')} landing stations · ${c((n) => n.type === 'repeater')} repeaters`;
-    case 'longhaul': return `${c((n) => n.id.startsWith('bb_'))} ROADMs · ${c((n) => n.type === 'ila')} amplifier huts`;
-    case 'metro': return `${c((n) => n.type === 'hub')} metro hubs · ${c((n) => n.type === 'dc')} data centers`;
-    case 'ipcore': return `${c((n) => n.type === 'core')} core routers · ${c((n) => n.type === 'dc')} data centers · 1 internet exchange`;
-    case 'aggregation': return `${c((n) => n.type === 'agg')} aggregation routers · ${c((n) => n.id.startsWith('end_'))} business customers`;
-    case 'xhaul': return `${c((n) => n.type === 'xhub')} hubs · ${c((n) => n.type === 'tower')} cell sites`;
-  }
-  return '';
+  const counts = {
+    submarine: [parts[id].links.length, c((n) => n.type === 'cls'), c((n) => n.type === 'repeater')],
+    longhaul: [c((n) => n.id.startsWith('bb_')), c((n) => n.type === 'ila')],
+    metro: [c((n) => n.type === 'hub'), c((n) => n.type === 'dc')],
+    ipcore: [c((n) => n.type === 'core'), c((n) => n.type === 'dc'), c((n) => n.type === 'ixp')],
+    aggregation: [c((n) => n.type === 'agg'), c((n) => n.id.startsWith('end_'))],
+    xhaul: [c((n) => n.type === 'xhub'), c((n) => n.type === 'tower')],
+  }[id];
+  return counts ? V.stats(id, counts) : '';
 }
 
 // The panel lists the three networks on whichever side of the globe is in view;
 // the switch above it spins the globe round to the other side.
 const list = $('#majors');
 let listedSide = null;
-function listSide(side) {
-  if (side === listedSide) return;
+function listSide(side, force = false) {
+  if (side === listedSide && !force) return;
   listedSide = side;
   list.replaceChildren(...MAJORS.filter((m) => m.side === side || m.both).map((m) => {
     const row = document.createElement('li');
     row.innerHTML = `
       <button class="major" data-major="${m.id}" style="--c:${m.color}">
         <span class="wire${LAYER[m.layers[0]].data ? ' dashed' : ''}" aria-hidden="true"></span>
-        <span class="txt"><span class="nm">${m.name}</span><span class="st">${majorStats(m.id)}</span></span>
+        <span class="txt"><span class="nm">${V.majorName(m.id)}</span><span class="st">${majorStats(m.id)}</span></span>
         <span class="go" aria-hidden="true">Open</span>
       </button>`;
     return row;
   }));
   for (const b of document.querySelectorAll('[data-side]')) b.setAttribute('aria-pressed', String(+b.dataset.side === side));
-  $('#side-name').textContent = `${SIDES[side].land} · ${SIDES[side].name.toLowerCase()}`;
+  $('#side-name').textContent = V.sideHeading(side);
 }
 for (const b of document.querySelectorAll('[data-side]')) {
   b.addEventListener('click', () => {
@@ -2799,7 +3377,7 @@ for (const b of document.querySelectorAll('[data-opt]')) {
 
 // Each major opens on its own view, addressed as #submarine, #longhaul or #metro,
 // so the browser's back button works and a real page can take over that address later.
-let mode = 'globe', detail = null;
+let mode = 'globe', detail = null, detailId = null;
 const details = {};
 const detailCam = new THREE.PerspectiveCamera(38, 1, 0.5, 6000);
 const detailControls = new OrbitControls(detailCam, canvas);
@@ -2811,16 +3389,18 @@ detailControls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DO
 detailControls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
 const panel = $('#panel'), detailPanel = $('#detail'), card = $('#card');
+// the panels hang below the title card, whatever height the mode gives it
+new ResizeObserver(() => $('#app').style.setProperty('--title-h', `${$('.title').getBoundingClientRect().height}px`)).observe($('.title'));
 const detailLabels = $('#detail-labels');
 const hint = $('.hint');
-const GLOBE_HINT = hint.textContent;
 
 function openMajor(id, topicId = null) {
   const want = topicId ? `${id}.${topicId}` : id;
   if (location.hash.slice(1) !== want) { location.hash = want; return; }   // hashchange comes back here
-  const m = MAJOR[id];
   const already = mode === 'detail' && detail === details[id];
   detail = details[id] ??= buildDetail(world, parts[id]);
+  detailId = id;
+  dressDetail(detail);
   if (already) { showTopic(topicId); return; }
   mode = 'detail';
   emphasise(null);
@@ -2843,30 +3423,7 @@ function openMajor(id, topicId = null) {
     detailControls.target.add(shift);
     detailControls.update();
   }
-  hint.textContent = 'Drag to turn · Right-drag or two fingers to pan · Scroll or pinch to zoom · Click a site';
-
-  detailPanel.style.setProperty('--c', m.color);
-  $('#d-title').textContent = m.name;
-  $('#d-blurb').textContent = m.blurb;
-  $('#d-stats').textContent = majorStats(id);
-  $('#d-layers').innerHTML = m.layers.map((l) => `<span class="chip" style="--c:${LAYER[l].color}">${LAYER[l].name}</span>`).join('');
-  detailLabels.replaceChildren();
-  detail.labels = detail.nodes.filter((n) => !['ila', 'repeater', 'router'].includes(n.type)).map((n) => {
-    const el = document.createElement('div');
-    el.className = 'lbl tag';
-    el.style.setProperty('--c', LAYER[n.layers[0]].color);
-    el.textContent = n.name;
-    detailLabels.append(el);
-    const o = detail.nodeObjs[n.id];
-    return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
-  });
-  $('#d-topics').replaceChildren(...TOPICS[id].map((t) => {
-    const b = document.createElement('button');
-    b.className = 'topic';
-    b.dataset.topic = t.id;
-    b.innerHTML = `<b>${t.name}</b><span>${t.summary}</span>`;
-    return b;
-  }));
+  renderDetailPanel(id);
   panel.hidden = true;
   detailPanel.hidden = false;
   labelLayer.hidden = true;
@@ -2876,13 +3433,48 @@ function openMajor(id, topicId = null) {
   showTopic(topicId);
 }
 
+// The words on a network's view: the panel, the site labels and the topic list.
+// Called when a network opens and again when the reading mode changes.
+function renderDetailPanel(id) {
+  const m = MAJOR[id];
+  hint.textContent = V.hints.detail;
+  detailPanel.style.setProperty('--c', m.color);
+  $('#d-title').textContent = V.majorName(id);
+  $('#d-blurb').textContent = V.majorBlurb(id);
+  $('#d-stats').textContent = majorStats(id);
+  $('#d-layers').innerHTML = m.layers.map((l) => `<span class="chip" style="--c:${LAYER[l].color}">${V.layerName(l)}</span>`).join('');
+  $('#d-tech-h').textContent = V.techHeading;
+  detailLabels.replaceChildren();
+  detail.labels = detail.nodes.filter((n) => !['ila', 'repeater', 'router'].includes(n.type)).map((n) => {
+    const el = document.createElement('div');
+    el.className = 'lbl tag';
+    el.style.setProperty('--c', LAYER[n.layers[0]].color);
+    el.textContent = V.nodeName(n);
+    detailLabels.append(el);
+    const o = detail.nodeObjs[n.id];
+    return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
+  });
+  $('#d-topics').replaceChildren(...topicsOf(id).map((t) => {
+    const b = document.createElement('button');
+    b.className = 'topic';
+    b.dataset.topic = t.id;
+    b.innerHTML = `<b>${t.name}</b><span>${t.summary}</span>`;
+    return b;
+  }));
+}
+// What the mode changes on a built view: the marker wording and whether the toys show.
+function dressDetail(d) {
+  d.fx.words = { cut: V.cutLabel, block: V.blockLabel };
+  for (const o of d.toys) o.visible = V.plain;
+}
+
 // ---------------------------------------------------------------- technology explainers
 
 const techCard = $('#tech');
 let player = null;
 function showTopic(topicId) {
-  const majorId = Object.keys(details).find((k) => details[k] === detail);
-  const topic = topicId && TOPICS[majorId].find((t) => t.id === topicId);
+  const majorId = detailId;
+  const topic = topicId && topicsOf(majorId).find((t) => t.id === topicId);
   if (player) { player.close(); player = null; }
   for (const b of document.querySelectorAll('[data-topic]')) b.setAttribute('aria-pressed', String(b.dataset.topic === topicId));
   if (!topic) { techCard.hidden = true; return; }
@@ -2904,8 +3496,7 @@ function renderStep(step) {
 $('#d-topics').addEventListener('click', (e) => {
   const b = e.target.closest('[data-topic]');
   if (!b) return;
-  const majorId = Object.keys(details).find((k) => details[k] === detail);
-  openMajor(majorId, b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.topic);
+  openMajor(detailId, b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.topic);
 });
 $('#t-next').addEventListener('click', () => {
   if (!player) return;
@@ -2915,8 +3506,7 @@ $('#t-next').addEventListener('click', () => {
 $('#t-back').addEventListener('click', () => { if (player && player.i > 0) renderStep(player.back()); });
 $('#t-close').addEventListener('click', closeTopic);
 function closeTopic() {
-  const majorId = Object.keys(details).find((k) => details[k] === detail);
-  if (majorId) openMajor(majorId, null);
+  if (detailId) openMajor(detailId, null);
 }
 
 function closeMajor() {
@@ -2930,14 +3520,17 @@ function closeMajor() {
   labelLayer.hidden = false;
   detailLabels.hidden = true;
   card.hidden = true;
-  hint.textContent = GLOBE_HINT;
+  hint.textContent = V.hints.globe;
 }
 // Back goes to the globe in one hop, however many topics were visited on the way.
 $('#btn-back').addEventListener('click', () => { history.pushState(null, '', location.pathname + location.search); route(); });
 function route() {
   const [id, topicId] = location.hash.slice(1).split('.');
-  if (MAJOR[id]) openMajor(id, TOPICS[id].some((t) => t.id === topicId) ? topicId : null);
-  else if (mode === 'detail') closeMajor();
+  if (!MAJOR[id]) { if (mode === 'detail') closeMajor(); return; }
+  // a link to an explainer the other mode has switches to that mode
+  const has = (set) => set[id].some((t) => t.id === topicId);
+  if (topicId && !has(V.plain ? BASICS : TOPICS) && has(V.plain ? TOPICS : BASICS)) applyMode(V.plain ? 'engineer' : 'explorer');
+  openMajor(id, topicsOf(id).some((t) => t.id === topicId) ? topicId : null);
 }
 addEventListener('hashchange', route);
 
@@ -2970,13 +3563,15 @@ function selectInDetail(id) {
     const l = world.links.find((x) => x.id === lid);
     return l.a === id ? l.b : l.a;
   }))].map((nid) => world.byId[nid]);
-  card.querySelector('.card-k').textContent = TYPE_LABEL[n.type] || n.type;
-  card.querySelector('.card-t').textContent = n.name;
-  card.querySelector('.card-role').textContent = n.role || '';
-  card.querySelector('.card-gear').textContent = n.gear || '';
+  card.querySelector('.card-k').textContent = V.typeLabel(n.type);
+  card.querySelector('.card-t').textContent = V.nodeName(n);
+  card.querySelector('.card-role').textContent = V.nodeRole(n);
+  card.querySelector('.card-gear-h').textContent = V.gearHeading;
+  card.querySelector('.card-gear').textContent = V.nodeGear(n);
+  card.querySelector('dl').hidden = !V.nodeGear(n);
   card.querySelector('.card-layers').innerHTML = n.layers.map((lid) =>
-    `<span class="chip" style="--c:${LAYER[lid].color}">${LAYER[lid].short}</span>`).join('');
-  card.querySelector('.card-links').innerHTML = neighbours.map((m) => `<li><button data-goto="${m.id}">${m.name}</button></li>`).join('');
+    `<span class="chip" style="--c:${LAYER[lid].color}">${V.layerShort(lid)}</span>`).join('');
+  card.querySelector('.card-links').innerHTML = neighbours.map((m) => `<li><button data-goto="${m.id}">${V.nodeName(m)}</button></li>`).join('');
   card.querySelector('.card-links-h').hidden = !neighbours.length;
   card.hidden = false;
 }
@@ -3089,11 +3684,11 @@ function hover() {
     const m = pickMajor(lastMove);
     emphasise(m);
     canvas.style.cursor = m ? 'pointer' : '';
-    if (m) showTip(lastMove, MAJOR[m].color, MAJOR[m].name, MAJOR[m].place + ' · click to open'); else tip.hidden = true;
+    if (m) showTip(lastMove, MAJOR[m].color, V.majorName(m), V.majorPlace(m) + ' · click to open'); else tip.hidden = true;
   } else {
     const id = pickSite(lastMove);
     canvas.style.cursor = id ? 'pointer' : '';
-    if (id) showTip(lastMove, LAYER[world.byId[id].layers[0]].color, world.byId[id].name, TYPE_LABEL[world.byId[id].type]); else tip.hidden = true;
+    if (id) showTip(lastMove, LAYER[world.byId[id].layers[0]].color, V.nodeName(world.byId[id]), V.typeLabel(world.byId[id].type)); else tip.hidden = true;
   }
   lastMove = null;
 }
@@ -3105,6 +3700,32 @@ addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (selected) selectInDetail(null); else if (player) closeTopic(); else $('#btn-back').click();
 });
+
+// ---------------------------------------------------------------- switching mode
+
+function applyMode(id) {
+  modeId = id;
+  V = vocab(id);
+  document.documentElement.dataset.mode = id;
+  try { localStorage.setItem(MODE_KEY, id); } catch {}
+  for (const b of document.querySelectorAll('.modes [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === id));
+  $('#subtitle').textContent = V.subtitle;
+  plane.visible = V.plain;
+  for (const k in details) dressDetail(details[k]);
+  listSide(listedSide, true);
+  if (mode === 'detail') {
+    // the explainers differ between modes, so an open one closes
+    if (player) { player.close(); player = null; }
+    techCard.hidden = true;
+    if (location.hash.includes('.')) history.replaceState(null, '', `#${detailId}`);
+    renderDetailPanel(detailId);
+    if (selected) selectInDetail(selected);
+  } else {
+    hint.textContent = V.hints.globe;
+  }
+}
+for (const b of document.querySelectorAll('.modes [data-mode]')) b.addEventListener('click', () => { if (b.dataset.mode !== modeId) applyMode(b.dataset.mode); });
+applyMode(modeId);
 
 // ---------------------------------------------------------------- loop
 

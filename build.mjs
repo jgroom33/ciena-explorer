@@ -16,7 +16,7 @@ const ORBIT_URL = local ? '../vendor/OrbitControls.js' : 'https://cdn.jsdelivr.n
 
 // Local modules, dependencies first. Their own imports of each other are dropped
 // and `export` keywords stripped, so they share one module scope.
-const modules = ['js/world.js', 'js/scene.js', 'js/detail.js', 'js/tech.js', 'js/main.js'].map((p) => read(p)
+const modules = ['js/world.js', 'js/scene.js', 'js/detail.js', 'js/tech.js', 'js/basics.js', 'js/vocab.js', 'js/main.js'].map((p) => read(p)
   .replace(/^import [^;]*? from '\.\/[^']+';\n/gm, '')
   .replace(/^export (const|function|let)/gm, '$1'));
 const threeImports = new Set();

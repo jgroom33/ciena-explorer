@@ -3,15 +3,15 @@
 // a clean scene and describes everything it wants shown, so Back and Next are
 // just "show step i". No three.js in here; the steps talk to the view's `fx`.
 
-const TC = {
+export const TC = {
   wave: '#ff7f50', wave2: '#9b5de5', wave3: '#2ec4b6', red: '#e63946', white: '#ffffff',
   voice: '#e63946', video: '#ff8c1a', biz: '#2f80ed', best: '#8d99ae', ccm: '#2ec4b6', frame: '#7b2cbf',
 };
 
 // Reusable scene recipes.
-const glowPath = (fx, ids) => { fx.focus(fx.pathLinks(ids)); return ids; };
+export const glowPath = (fx, ids) => { fx.focus(fx.pathLinks(ids)); return ids; };
 const cores = (fx) => Object.values(fx.byId).filter((n) => n.type === 'core').map((n) => n.id);
-const ofType = (fx, t) => Object.values(fx.byId).filter((n) => n.type === t).map((n) => n.id);
+export const ofType = (fx, t) => Object.values(fx.byId).filter((n) => n.type === t).map((n) => n.id);
 const sidTag = (sid) => `<span class="sid">${sid}</span>`;
 const stackTag = (labels) => `<span class="stack">${labels.map((l) => `<b>${l}</b>`).join('')}</span>`;
 
@@ -23,7 +23,7 @@ function srPacket(fx, ids, sids, color = TC.biz, speed = 9) {
 }
 
 // Continuity-check heartbeats both ways between two MEPs.
-function ccm(fx, a, b, period = 1.4) {
+export function ccm(fx, a, b, period = 1.4) {
   const ids = fx.path(a, b);
   fx.focus(fx.pathLinks(ids));
   fx.anchor('<b>MEP</b>', fx.nodePos(a, 6), 'mep');

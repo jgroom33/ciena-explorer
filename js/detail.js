@@ -60,7 +60,7 @@ export function buildDetail(world, part) {
   scene.add(floor);
   }
 
-  const movers = [];
+  const movers = [], toys = [];
   if (sphere) {
     // The sea: a sandy floor, a translucent surface above the network, and whales.
     // deep water behind, a sandy floor under the cables, sunlight filtering down
@@ -95,6 +95,7 @@ export function buildDetail(world, part) {
     [[0.25, 0.9, 1.0], [-0.4, 0.7, 1.3], [0.9, -0.3, 0.8]].forEach(([ax, az, sc], i) => {
       const w = whale(sc * space.k * 0.9);
       scene.add(w);
+      toys.push(w);
       const axis = new THREE.Vector3(ax, 1, az).normalize();
       const u0 = new THREE.Vector3().crossVectors(axis, Y).normalize();
       const v0 = new THREE.Vector3().crossVectors(axis, u0).normalize();
@@ -184,7 +185,7 @@ export function buildDetail(world, part) {
 
   const fx = buildFx({ scene, nodes, links, nodeObjs, linkObjs, space });
   fxRef = fx;
-  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir, fx };
+  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir, fx, toys };
 }
 
 // ---------------------------------------------------------------- effects
@@ -276,12 +277,13 @@ function buildFx({ scene, nodes, links, nodeObjs, linkObjs, space }) {
     return a;
   }
 
-  // a cut or a block marker on the middle of a link
+  // a cut or a block marker on the middle of a link; the words come from `fx.words`
+  // so the beginner and the engineer read it in their own vocabulary
   function marker(linkId, kind) {
     const o = linkObjs[linkId];
     const mid = o.table[Math.floor(o.table.length / 2)].clone();
     if (kind === 'cut') linkState(linkId, 'cut');
-    return anchor(kind === 'cut' ? '<b>✕</b> fibre cut' : '<b>▮</b> RPL blocked', mid, 'mark ' + kind);
+    return anchor(kind === 'cut' ? `<b>✕</b> ${fx.words.cut}` : `<b>▮</b> ${fx.words.block}`, mid, 'mark ' + kind);
   }
 
   // a packet running along a path of sites; `tag` is HTML that rides with it
@@ -351,6 +353,7 @@ function buildFx({ scene, nodes, links, nodeObjs, linkObjs, space }) {
     }
   }
 
-  return { byId, link, linksOf, path, pathLinks, nodePos, linkState, focus, spot, anchor, marker, packet, queue, clear, update, anchors };
+  const fx = { byId, link, linksOf, path, pathLinks, nodePos, linkState, focus, spot, anchor, marker, packet, queue, clear, update, anchors, words: { cut: 'fibre cut', block: 'RPL blocked' } };
+  return fx;
 }
 

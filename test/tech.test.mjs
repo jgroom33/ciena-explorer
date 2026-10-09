@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildWorld, MAJORS, majorParts } from '../js/world.js';
 import { TOPICS, TechPlayer } from '../js/tech.js';
+import { BASICS } from '../js/basics.js';
+import { vocab, MODES } from '../js/vocab.js';
+import { LAYER, ENDPOINT } from '../js/world.js';
 
 const world = buildWorld();
 const parts = majorParts(world);
@@ -39,20 +42,57 @@ function mockFx(majorId) {
   };
 }
 
-test('every network has technology topics, and every step only touches that network', () => {
-  for (const m of MAJORS) {
-    const topics = TOPICS[m.id];
-    assert.ok(topics && topics.length >= 1, `${m.id} has no topics`);
-    for (const t of topics) {
-      assert.ok(t.id && t.name && t.tag && t.summary && t.steps.length >= 2, `${m.id}/${t.id} is incomplete`);
-      const fx = mockFx(m.id);
-      const player = new TechPlayer(fx);
-      player.open(t);
-      for (let i = 1; i < t.steps.length; i++) player.next();
-      for (let i = t.steps.length - 1; i > 0; i--) player.back();
-      assert.ok(fx.calls.packets + fx.calls.spots + fx.calls.anchors > 0, `${m.id}/${t.id} shows nothing`);
+for (const [name, SET] of [['engineer', TOPICS], ['explorer', BASICS]]) {
+  test(`${name}: every network has topics, and every step only touches that network`, () => {
+    for (const m of MAJORS) {
+      const topics = SET[m.id];
+      assert.ok(topics && topics.length >= 1, `${m.id} has no topics`);
+      assert.equal(new Set(topics.map((t) => t.id)).size, topics.length, `${m.id}: topic ids repeat`);
+      for (const t of topics) {
+        assert.ok(t.id && t.name && t.tag && t.summary && t.steps.length >= 2, `${m.id}/${t.id} is incomplete`);
+        const fx = mockFx(m.id);
+        const player = new TechPlayer(fx);
+        player.open(t);
+        for (let i = 1; i < t.steps.length; i++) player.next();
+        for (let i = t.steps.length - 1; i > 0; i--) player.back();
+        assert.ok(fx.calls.packets + fx.calls.spots + fx.calls.anchors > 0, `${m.id}/${t.id} shows nothing`);
+      }
     }
+  });
+}
+
+// Explorer mode is an introduction: the words the trade uses stay out of it unless a
+// step is there to introduce them (DWDM has its own topic).
+const JARGON = /\b(ROADM|MPLS|DWDM|CDC|G\.8032|R-APS|RPL|MEP|CCM|CFM|QoS|SR|TI-LFA|IGP|VLAN|DSCP|eCPRI|OTN|DCI|ILA|NID|IXP|SLA|Tb\/s|λ|wavelength)\b/;
+test('explorer: the plain vocabulary covers everything the HUD prints, without jargon', () => {
+  const V = vocab('explorer');
+  const E = vocab('engineer');
+  for (const m of MAJORS) {
+    for (const f of ['majorName', 'majorBlurb', 'majorPlace']) {
+      assert.ok(V[f](m.id), `${m.id}: no plain ${f}`);
+      assert.ok(!JARGON.test(V[f](m.id)), `${m.id}: plain ${f} has jargon: ${V[f](m.id)}`);
+      assert.ok(E[f](m.id), `${m.id}: no engineer ${f}`);
+    }
+    assert.ok(!JARGON.test(V.stats(m.id, [1, 1, 1])), `${m.id}: plain stats have jargon`);
+    for (const t of BASICS[m.id]) {
+      if (t.id === 'colours') continue;
+      for (const x of [t.name, t.summary, ...t.steps.map((st) => st.say)]) assert.ok(!JARGON.test(x), `${m.id}/${t.id}: "${x}" has jargon`);
+    }
+    for (const l of m.layers) { assert.ok(V.layerName(l) && V.layerShort(l), `plain names for layer ${l}`); assert.ok(!JARGON.test(V.layerName(l)), V.layerName(l)); }
   }
+  for (const id of Object.keys(LAYER)) assert.ok(!JARGON.test(V.layerName(id)) && !JARGON.test(V.layerShort(id)), `layer ${id} not translated`);
+  const types = new Set(world.nodes.map((n) => n.type));
+  for (const type of types) {
+    assert.notEqual(V.typeLabel(type), type, `no plain label for site type ${type}`);
+    assert.ok(!JARGON.test(V.typeLabel(type)), `plain label for ${type} has jargon`);
+    const n = world.nodes.find((x) => x.type === type);
+    assert.ok(!JARGON.test(V.nodeName(n)), `${n.id}: plain name "${V.nodeName(n)}" has jargon`);
+    assert.ok(!JARGON.test(V.nodeRole(n)), `${n.id}: plain role has jargon`);
+    assert.ok(!JARGON.test(V.nodeGear(n)), `${n.id}: plain gear has jargon`);
+  }
+  for (const n of world.nodes) assert.ok(!JARGON.test(V.nodeName(n)), `${n.id}: "${V.nodeName(n)}"`);
+  for (const k of Object.keys(ENDPOINT)) assert.ok(V.typeLabel(k) !== k, `endpoint ${k}`);
+  assert.deepEqual(MODES.map((m) => m.id), ['explorer', 'engineer']);
 });
 
 test('the technologies the brief asked for are where it asked for them', () => {

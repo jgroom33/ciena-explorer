@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="explorer">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -8,7 +8,7 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="css/net.css">
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/" } }
@@ -16,6 +16,10 @@
 </head>
 <body>
 <!--HUD-->
+<script>
+// Pick the saved reading mode before anything paints, so the theme never flashes.
+try { const m = localStorage.getItem('netlandia.mode'); if (m === 'explorer' || m === 'engineer') document.documentElement.dataset.mode = m; } catch {}
+</script>
 <div id="app">
   <canvas id="view" aria-label="3D map of Netlandia's networks"></canvas>
   <div id="labels" aria-hidden="true"></div>
@@ -24,7 +28,11 @@
 
   <header class="title">
     <h1>Netlandia</h1>
-    <p>Transport on one side, the data network on the other</p>
+    <p id="subtitle">Transport on one side, the data network on the other</p>
+    <div class="modes" role="group" aria-label="Reading mode">
+      <button data-mode="explorer" aria-pressed="true" title="Learn how networks work, in plain words"><b>Explorer</b><span>the basics</span></button>
+      <button data-mode="engineer" aria-pressed="false" title="The full picture, with the real terminology"><b>Engineer</b><span>full detail</span></button>
+    </div>
   </header>
 
   <nav id="panel" class="panel" aria-label="Networks">
@@ -47,7 +55,7 @@
     <p id="d-stats" class="d-stats"></p>
     <p id="d-blurb"></p>
     <div id="d-layers" class="d-layers"></div>
-    <h3 class="d-h">Explore the technology</h3>
+    <h3 class="d-h" id="d-tech-h">Explore the technology</h3>
     <div id="d-topics" class="topics"></div>
   </section>
 
@@ -71,7 +79,7 @@
     <h3 class="card-t"></h3>
     <div class="card-layers"></div>
     <p class="card-role"></p>
-    <dl><dt>Equipment</dt><dd class="card-gear"></dd></dl>
+    <dl><dt class="card-gear-h">Equipment</dt><dd class="card-gear"></dd></dl>
     <h4 class="card-links-h">Connects to</h4>
     <ul class="card-links"></ul>
   </aside>

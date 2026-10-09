@@ -10,6 +10,24 @@ site can be clicked for its equipment and connections. Packets run along every l
 |---|---|
 | ![](docs/overview.png) | ![](docs/side-b.png) |
 
+## Two ways to read it: Explorer and Engineer
+
+The switch under the title picks how the map is labelled, and the choice is remembered.
+
+| | Explorer | Engineer |
+|---|---|---|
+| for | an introduction to networking: no acronyms, no part numbers | people who already know the trade |
+| look | the board game: sticker cards, rounded type, a daylight sky, whales and an airliner | a flat, dark console: plain type, mono labels, no toys |
+| networks | *Countrywide light highway*, *Internet core*, *Mobile phone network*… | *Long-haul RLS mesh*, *IP/MPLS core*, *5G mobile xhaul*… |
+| sites | *light junction*, *booster hut*, *collector router*, *beach cable station* | *RLS ROADM site*, *RLS amplifier hut*, *aggregation router*, *cable landing station* |
+| site card | what the place does and what is inside, in plain words | its role and the Ciena equipment in it |
+| explainers | **Learn how it works**: data travels as light, many colours in one fibre (DWDM, in plain words), what a packet is, finding another way, who goes first, your phone call's journey | **Explore the technology**: CDC ROADMs, mesh restoration, SR-MPLS, TI-LFA, G.8032, QoS, CFM… |
+
+Explorer's words live in `js/vocab.js` and its explainers in `js/basics.js`; a test
+checks that nothing Explorer prints uses the trade's acronyms (the DWDM topic, which
+is there to introduce one, is the exception). A link to an explainer only one mode
+has, such as `#ipcore.sr`, switches to that mode.
+
 ## The two sides
 
 The globe is a toy world, not a diagram: nothing is wired up on it. The equipment
@@ -127,10 +145,12 @@ inlined, so it can be shared as one file.
 | `js/world.js` | pure data: the two sides and their projections onto the planet, terrain, towns, every node and link, generated customers, amplifiers and repeaters, the six major networks, the region each covers on the globe and the links each owns |
 | `js/scene.js` | three.js: the planet, sea and atmosphere, towns and trees (instanced), equipment models, solid and dashed cables, boats, wind farm, clouds |
 | `js/detail.js` | a network on its own: laid flat, or round an invisible planet, with its own lights and traffic, and the effects the explainers use |
-| `js/tech.js` | the technology topics for each network and the step player |
+| `js/tech.js` | the technology topics for each network (Engineer mode) and the step player |
+| `js/basics.js` | the introduction-to-networking topics for each network (Explorer mode) |
+| `js/vocab.js` | the two reading modes: every name, label and sentence the HUD prints, in plain words and in the trade's |
 | `js/main.js` | globe camera and side switch, the networks as clickable regions with their halos, the airliner, switching views, labels, picking, the site card |
-| `css/net.css` | the HUD |
-| `test/tech.test.mjs` | every topic's steps touch only that network's sites and links; the brief's technologies are where it asked |
+| `css/net.css` | the HUD, and the Engineer theme as a second set of tokens |
+| `test/tech.test.mjs` | every topic's steps, in both modes, touch only that network's sites and links; Explorer's vocabulary covers every site and network without jargon; the brief's technologies are where it asked |
 | `test/world.test.mjs` | data checks: links resolve, transport on side A and data on side B, gear and fibre on land, subsea cables at sea, no two cables run alongside each other, every ROADM and core router has 3+ routes, no customer or cell site on a spur, the six networks own their own links, each network's sites stand inside its region |
 | `build.mjs` | bundles everything into `dist/netlandia.html`, and fails if two modules declare the same top-level name |
 | `vendor/` | three.js r160 and OrbitControls (MIT) |
