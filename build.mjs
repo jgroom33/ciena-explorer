@@ -37,10 +37,18 @@ try {
 const html = read('index.html');
 const hud = html.slice(html.indexOf('<!--HUD-->'), html.indexOf('<!--/HUD-->') + '<!--/HUD-->'.length);
 const title = html.match(/<title>.*<\/title>/)[0];
+// The favicon rides inside the single file as a data URI, when one is in the repo.
+const favicon = (() => {
+  for (const [f, type] of [['favicon.svg', 'image/svg+xml'], ['favicon.ico', 'image/x-icon'], ['favicon.png', 'image/png']]) {
+    try { return `<link rel="icon" type="${type}" href="data:${type};base64,${readFileSync(join(here, f)).toString('base64')}">`; } catch {}
+  }
+  return '';
+})();
 const fonts = html.match(/<link rel="preconnect"[^>]*>\n<link rel="stylesheet" href="https:\/\/fonts[^>]*>/)[0];
 
 const out = `<meta charset="utf-8">
 ${title}
+${favicon}
 ${fonts}
 <style>
 ${read('css/net.css')}
