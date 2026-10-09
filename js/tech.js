@@ -44,7 +44,7 @@ export const TOPICS = {
           run: (fx) => { fx.focus(fx.linksOf()); for (const id of ofType(fx, 'ila')) fx.spot(id, TC.red); },
         },
         {
-          say: 'A wavelength launched at Oakridge rides the same fibre all the way to the Capitalia North hub without ever being turned back into electrons. Watch it pass the amp huts.',
+          say: 'A wavelength launched at Prismfield rides the same fibre all the way to the Lumen City North hub without ever being turned back into electrons. Watch it pass the amp huts.',
           run: (fx) => { const ids = glowPath(fx, fx.path('bb_oak', 'hub_n')); fx.packet(ids, { color: TC.wave, speed: 12, tag: 'λ 1550.12 nm' }); },
         },
         {
@@ -58,19 +58,19 @@ export const TOPICS = {
       summary: 'Colorless, directionless, contentionless switching of light at a five-degree site.',
       steps: [
         {
-          say: 'Junction is a five-degree ROADM: five fibre directions meet here, and any wavelength can be switched from any direction to any other, all in the optical domain.',
+          say: 'Crosspoint is a five-degree ROADM: five fibre directions meet here, and any wavelength can be switched from any direction to any other, all in the optical domain.',
           run: (fx) => { fx.focus(['bb_oak', 'bb_mid', 'bb_lake', 'bb_south', 'bb_stone'].map((o) => fx.link('bb_junc', o))); fx.spot('bb_junc', TC.red); },
         },
         {
-          say: 'Colorless: an add/drop port is not tied to one wavelength. A transponder plugged in at Junction can be tuned to any colour, so three different channels can leave the same port.',
+          say: 'Colorless: an add/drop port is not tied to one wavelength. A transponder plugged in at Crosspoint can be tuned to any colour, so three different channels can leave the same port.',
           run: (fx) => { fx.spot('bb_junc', TC.red); const ids = glowPath(fx, ['bb_junc', 'bb_stone']); [TC.wave, TC.wave2, TC.wave3].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.7, tag: ['λ 1550.12', 'λ 1551.72', 'λ 1553.33'][i] })); },
         },
         {
-          say: 'Directionless: that same port can send its wave out of any degree. The same channel is steered east toward Stonebridge or south toward Southvale by software, with nobody touching a patch cord.',
+          say: 'Directionless: that same port can send its wave out of any degree. The same channel is steered east toward Glassbridge or south toward Spectraville by software, with nobody touching a patch cord.',
           run: (fx) => { fx.spot('bb_junc', TC.red); fx.focus([fx.link('bb_junc', 'bb_stone'), fx.link('bb_junc', 'bb_south')]); fx.packet(['bb_junc', 'bb_stone'], { color: TC.wave, speed: 10, tag: 'λ 1550.12 → east' }); fx.packet(['bb_junc', 'bb_south'], { color: TC.wave, speed: 10, delay: 1.2, tag: 'λ 1550.12 → south' }); },
         },
         {
-          say: 'Contentionless: two waves of the same colour arriving from different directions can both be dropped at Junction without colliding. Here the same channel comes in from Oakridge and from Midhill at once.',
+          say: 'Contentionless: two waves of the same colour arriving from different directions can both be dropped at Crosspoint without colliding. Here the same channel comes in from Prismfield and from Raman Ridge at once.',
           run: (fx) => { fx.spot('bb_junc', TC.red); fx.focus([fx.link('bb_oak', 'bb_junc'), fx.link('bb_mid', 'bb_junc')]); fx.packet(['bb_oak', 'bb_junc'], { color: TC.wave, speed: 10, tag: 'λ 1550.12' }); fx.packet(['bb_mid', 'bb_junc'], { color: TC.wave, speed: 10, delay: 0.3, tag: 'λ 1550.12' }); },
         },
       ],
@@ -80,15 +80,15 @@ export const TOPICS = {
       summary: 'What a fibre cut does to a wave, and how the mesh relights it round the break.',
       steps: [
         {
-          say: 'A wave from Oakridge to the Capitalia West hub normally takes the short way: Oakridge, Junction, Stonebridge, into the metro.',
+          say: 'A wave from Prismfield to the Lumen City West hub normally takes the short way: Prismfield, Crosspoint, Glassbridge, into the metro.',
           run: (fx) => { const ids = glowPath(fx, ['bb_oak', 'bb_junc', 'bb_stone', 'hub_w']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
         },
         {
-          say: 'A backhoe finds the Junction–Stonebridge span. Every wave on it goes dark.',
+          say: 'A backhoe finds the Crosspoint–Glassbridge span. Every wave on it goes dark.',
           run: (fx) => { glowPath(fx, ['bb_oak', 'bb_junc']); fx.marker(fx.link('bb_junc', 'bb_stone'), 'cut'); fx.packet(['bb_oak', 'bb_junc'], { color: TC.wave, speed: 12 }); },
         },
         {
-          say: 'Because every site in the mesh has three or more routes out, the control plane re-tunes the ROADMs and the wave is relit over a path round the cut: here via Southvale and Millbrook.',
+          say: 'Because every site in the mesh has three or more routes out, the control plane re-tunes the ROADMs and the wave is relit over a path round the cut: here via Spectraville and Beambrook.',
           run: (fx) => { const cut = fx.link('bb_junc', 'bb_stone'); const ids = glowPath(fx, fx.path('bb_oak', 'hub_w', [cut])); fx.marker(cut, 'cut'); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
         },
         {
@@ -105,7 +105,7 @@ export const TOPICS = {
       summary: 'Two-degree ROADMs on a ring: simpler and cheaper than the long-haul mesh.',
       steps: [
         {
-          say: 'Metro transport does not need five-degree switching. The four Capitalia hubs sit on a two-degree ring: each ROADM has an east side and a west side, and fixed filters that add and drop that hub’s own wavelengths.',
+          say: 'Metro transport does not need five-degree switching. The four Lumen City hubs sit on a two-degree ring: each ROADM has an east side and a west side, and fixed filters that add and drop that hub’s own wavelengths.',
           run: (fx) => { fx.focus([fx.link('hub_n', 'hub_e'), fx.link('hub_e', 'hub_s'), fx.link('hub_s', 'hub_w'), fx.link('hub_w', 'hub_n')]); for (const h of ['hub_n', 'hub_e', 'hub_s', 'hub_w']) fx.spot(h, '#14b8a6'); },
         },
         {

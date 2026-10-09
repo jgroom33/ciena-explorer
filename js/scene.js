@@ -327,7 +327,7 @@ export function buildLife(scene) {
     });
   }
 
-  // Cable ship parked over the Portsea – Isla Verde cable.
+  // Cable ship parked over the Lumen City – Coherent Isle cable.
   const ship = new THREE.Group();
   ship.add(box(5, 0.9, 1.8, '#f1faee', 0, -0.3, 0, 0.08), box(1.6, 1.2, 1.4, '#ffc300', 1.2, 0.6, 0, 0.07),
     cyl(0.12, 0.12, 2.2, '#1d2a44', -1.4, 0.6, 0, 6, 0), box(0.2, 0.2, 1.8, '#1d2a44', -1.9, 2.6, 0, 0));

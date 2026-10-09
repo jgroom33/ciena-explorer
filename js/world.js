@@ -1,7 +1,7 @@
 // The world of Netlandia: terrain, places and every network, as plain data.
 // No three.js in here, so the tests can check it under node.
 
-// A small planet with a country on each face. Side A (facing +Z) is Netlandia and
+// A small planet with a country on each face. Side A (facing +Z) is Photonia and
 // carries the transport networks; side B (facing -Z) is Packetland and carries the
 // data network. Each side is drawn on its own flat map in x/z and wrapped onto its
 // hemisphere with an azimuthal equidistant projection: distance from that side's
@@ -11,7 +11,7 @@ export const SEA_FLOOR = -6;
 const EDGE = (Math.PI / 2) * PLANET_R;   // flat radius of each side's rim
 
 export const SIDES = [
-  { id: 0, key: 'A', name: 'Transport', land: 'Netlandia', home: [-32, 8] },
+  { id: 0, key: 'A', name: 'Transport', land: 'Photonia', home: [-32, 8] },
   { id: 1, key: 'B', name: 'Data network', land: 'Packetland', home: [2, 6] },
 ];
 
@@ -67,18 +67,18 @@ export function smoothstep(a, b, x) {
 // Each blob is an ellipse of land on one side's map; the coast is where the best blob reaches zero.
 const BLOBS = [
   [
-    [-50, 0, 62, 50],    // Netlandia: western heartland
-    [-5, 12, 48, 42],    //   eastern lowlands, Capitalia
+    [-50, 0, 62, 50],    // Photonia: western heartland
+    [-5, 12, 48, 42],    //   eastern lowlands, Lumen City
     [-78, -35, 32, 28],  //   northern highlands
-    [-15, -40, 42, 26],  //   Midhill plateau
-    [95, 2, 24, 34],     // Isla Verde
+    [-15, -40, 42, 26],  //   Raman Ridge plateau
+    [95, 2, 24, 34],     // Coherent Isle
     [108, -30, 14, 14],  //   Palm Point
   ],
   [
     [0, 0, 62, 48],      // Packetland: the heartland around Coreburg
     [-40, 16, 34, 30],   //   Gateway Bay lobe
     [32, -22, 36, 30],   //   Edgewater highlands
-    [38, 30, 22, 18],    //   Southfield peninsula
+    [38, 30, 22, 18],    //   Framefield peninsula
     [-8, -34, 36, 20],   //   Northport coast
   ],
 ];
@@ -149,12 +149,12 @@ export const LAYERS = [
   },
   {
     id: 'backbone', side: 0, name: 'Countrywide RLS mesh', short: 'RLS mesh', color: '#e63946',
-    blurb: 'A meshed line system across the middle of Netlandia.',
+    blurb: 'A meshed line system across the middle of Photonia.',
     gear: 'Ciena RLS (Reconfigurable Line System) with WaveLogic 6',
   },
   {
     id: 'metro', side: 0, name: 'Metro optical ring', short: 'Metro optical', color: '#14b8a6',
-    blurb: 'A packet-optical ring joining the four Capitalia metro hubs.',
+    blurb: 'A packet-optical ring joining the four Lumen City metro hubs.',
     gear: 'Ciena RLS with WaveLogic 5 Nano',
   },
   {
@@ -192,45 +192,45 @@ export const LAYER = Object.fromEntries(LAYERS.map((l) => [l.id, l]));
 
 // ---------------------------------------------------------------- places
 //
-// Side A, Netlandia, is laid out in three bands so the networks don't pile up:
-//   west   (x < -62)   regional rings through small towns
-//   centre (-62..-10)  the countrywide RLS mesh between ROADM towns
-//   east   (x > -5)    Capitalia: skyline, data centers, metro hubs on an optical ring
+// Side A, Photonia, is laid out in three bands so the networks don't pile up:
+//   west   (x < -62)   regional rings through the Glass Highlands and Lightmoor
+//   centre (-62..-10)  the Wavelands: the countrywide RLS mesh between ROADM towns
+//   east   (x > -5)    Lumen City: skyline, data centers, metro hubs on an optical ring
 // Side B, Packetland, has Coreburg in the middle with the IP core around it, the
 // aggregation ring hugging the city and the 5G xhaul ring out in the countryside.
 
-export const METRO = { x: 20, z: 12 };      // downtown Capitalia, side A
+export const METRO = { x: 20, z: 12 };      // downtown Lumen City, side A
 export const COREBURG = { x: 0, z: 0 };     // downtown Coreburg, side B
 
 const C = (id, name, x, z, r, extra = {}) => ({ id, name, x, z, r, side: 0, ...extra });
 export const CITIES = [
-  C('capitalia', 'Capitalia', METRO.x, METRO.z, 12, { big: true, tall: 1.2, dense: true }),
-  C('northgate', 'Northgate', -76, -36, 3.5, { town: true }),
-  C('ridgeway', 'Ridgeway', -98, -16, 3, { town: true }),
-  C('pinecrest', 'Pinecrest', -84, -2, 3, { town: true }),
-  C('westmoor', 'Westmoor', -96, 16, 3.5, { town: true }),
-  C('fernbank', 'Fernbank', -86, 36, 3, { town: true }),
-  C('elmford', 'Elmford', -62, 38, 3, { town: true }),
-  C('oakridge', 'Oakridge', -62, -22, 3, { town: true }),
-  C('lakeview', 'Lakeview', -60, 10, 3, { town: true }),
-  C('southvale', 'Southvale', -40, 32, 3, { town: true }),
-  C('midhill', 'Midhill', -38, -36, 3, { town: true }),
-  C('junction', 'Junction', -38, -2, 3, { town: true }),
-  C('cedargap', 'Cedar Gap', -14, -28, 3, { town: true }),
-  C('stonebridge', 'Stonebridge', -16, 0, 3, { town: true }),
-  C('millbrook', 'Millbrook', -16, 28, 3, { town: true }),
-  C('isla', 'Isla Verde', 92, 6, 6, { big: true, tall: 0.5 }),
-  C('palmtown', 'Palmtown', 104, -26, 3, { town: true }),
-  C('reefside', 'Reefside', 86, 26, 3, { town: true }),
+  C('capitalia', 'Lumen City', METRO.x, METRO.z, 12, { big: true, tall: 1.2, dense: true }),
+  C('northgate', 'Lensgate', -76, -36, 3.5, { town: true }),
+  C('ridgeway', 'Mirror Ridge', -98, -16, 3, { town: true }),
+  C('pinecrest', 'Halo Crest', -84, -2, 3, { town: true }),
+  C('westmoor', 'Lightmoor', -96, 16, 3.5, { town: true }),
+  C('fernbank', 'Flarebank', -86, 36, 3, { town: true }),
+  C('elmford', 'Filterford', -62, 38, 3, { town: true }),
+  C('oakridge', 'Prismfield', -62, -22, 3, { town: true }),
+  C('lakeview', 'Lambdaview', -60, 10, 3, { town: true }),
+  C('southvale', 'Spectraville', -40, 32, 3, { town: true }),
+  C('midhill', 'Raman Ridge', -38, -36, 3, { town: true }),
+  C('junction', 'Crosspoint', -38, -2, 3, { town: true }),
+  C('cedargap', 'Erbium Gap', -14, -28, 3, { town: true }),
+  C('stonebridge', 'Glassbridge', -16, 0, 3, { town: true }),
+  C('millbrook', 'Beambrook', -16, 28, 3, { town: true }),
+  C('isla', 'Coherent Isle', 92, 6, 6, { big: true, tall: 0.5 }),
+  C('palmtown', 'Beacon Point', 104, -26, 3, { town: true }),
+  C('reefside', 'Amp Reef', 86, 26, 3, { town: true }),
   // side B
   C('coreburg', 'Coreburg', COREBURG.x, COREBURG.z, 11, { side: 1, big: true, tall: 1.1, dense: true }),
   C('gateway', 'Gateway Bay', -50, 18, 5, { side: 1, big: true, tall: 0.5 }),
   C('edgewater', 'Edgewater', 48, -22, 5, { side: 1, tall: 0.45 }),
   C('northport', 'Northport', -14, -36, 3, { side: 1, town: true }),
-  C('southfield', 'Southfield', 34, 32, 3.5, { side: 1, town: true }),
+  C('southfield', 'Framefield', 34, 32, 3.5, { side: 1, town: true }),
   C('leafdale', 'Leafdale', -26, 36, 3, { side: 1, town: true }),
   C('spinehill', 'Spinehill', 20, -42, 3, { side: 1, town: true }),
-  C('brightwater', 'Brightwater', -38, -16, 3, { side: 1, town: true }),
+  C('brightwater', 'Labelbrook', -38, -16, 3, { side: 1, town: true }),
 ];
 export const CITY = Object.fromEntries(CITIES.map((c) => [c.id, c]));
 
@@ -238,7 +238,7 @@ export const CITY = Object.fromEntries(CITIES.map((c) => [c.id, c]));
 const N = (id, type, name, x, z, layers, extra = {}) => ({ id, type, name, x, z, layers, side: 0, ...extra });
 const NB = (id, type, name, x, z, layers, extra = {}) => N(id, type, name, x, z, layers, { side: 1, ...extra });
 const ROADM = (id, town, x, z) => N(id, 'pop', `${CITY[town].name} ROADM`, x, z, ['backbone'], { role: 'RLS ROADM site in the countrywide mesh' });
-const HUB = (id, name, x, z) => N(id, 'hub', name, x, z, ['metro', 'backbone'], { role: 'Capitalia metro hub, where the RLS mesh meets the metro optical ring' });
+const HUB = (id, name, x, z) => N(id, 'hub', name, x, z, ['metro', 'backbone'], { role: 'Lumen City metro hub, where the RLS mesh meets the metro optical ring' });
 const HUT = (id, town, x, z, ring) => N(id, 'regional', `${CITY[town].name} hut`, x, z, ['regional'], { role: `Ring site on the ${ring} ring` });
 const CORE = (id, name, x, z, role) => NB(id, 'core', name, x, z, ['ipcore'], { role });
 const AGG = (id, name, x, z) => NB(id, 'agg', name, x, z, ['agg'], { role: 'Aggregation router on a segment-routed ring' });
@@ -246,14 +246,14 @@ const XHUB = (id, town, x, z) => NB(id, 'xhub', `${CITY[town].name} pre-aggregat
 
 const PLACED = [
   // ---- side A: transport
-  N('dc_nw', 'dc', 'Capitalia DC North-West', 7, -9, ['dci'], { role: 'Colocation campus' }),
-  N('dc_ne', 'dc', 'Capitalia DC North-East', 32, -8, ['dci'], { role: 'Cloud on-ramp campus' }),
-  N('dc_se', 'dc', 'Capitalia Harbor DC', 31, 32, ['dci'], { role: 'Carrier hotel next to the cable landing', size: 1.2 }),
-  N('dc_sw', 'dc', 'Capitalia DC South-West', 7, 33, ['dci'], { role: 'Enterprise campus' }),
-  HUB('hub_n', 'Capitalia North hub', 19, -14),
-  HUB('hub_e', 'Capitalia East hub', 37, 12),
-  HUB('hub_s', 'Capitalia South hub', 20, 40),
-  HUB('hub_w', 'Capitalia West hub', -3, 12),
+  N('dc_nw', 'dc', 'Lumen City DC North-West', 7, -9, ['dci'], { role: 'Colocation campus' }),
+  N('dc_ne', 'dc', 'Lumen City DC North-East', 32, -8, ['dci'], { role: 'Cloud on-ramp campus' }),
+  N('dc_se', 'dc', 'Lumen City Harbor DC', 31, 32, ['dci'], { role: 'Carrier hotel next to the cable landing', size: 1.2 }),
+  N('dc_sw', 'dc', 'Lumen City DC South-West', 7, 33, ['dci'], { role: 'Enterprise campus' }),
+  HUB('hub_n', 'Lumen City North hub', 19, -14),
+  HUB('hub_e', 'Lumen City East hub', 37, 12),
+  HUB('hub_s', 'Lumen City South hub', 20, 40),
+  HUB('hub_w', 'Lumen City West hub', -3, 12),
 
   ROADM('bb_oak', 'oakridge', -62, -22),
   ROADM('bb_lake', 'lakeview', -60, 10),
@@ -264,22 +264,22 @@ const PLACED = [
   ROADM('bb_stone', 'stonebridge', -16, 0),
   ROADM('bb_mill', 'millbrook', -16, 28),
 
-  HUT('reg_north', 'northgate', -76, -36, 'Highlands'),
-  HUT('reg_ridge', 'ridgeway', -98, -16, 'Highlands'),
-  HUT('reg_pine', 'pinecrest', -84, -2, 'Highlands'),
-  HUT('reg_west', 'westmoor', -96, 16, 'Moorland'),
-  HUT('reg_fern', 'fernbank', -86, 36, 'Moorland'),
-  HUT('reg_elm', 'elmford', -62, 38, 'Moorland'),
+  HUT('reg_north', 'northgate', -76, -36, 'Glass Highlands'),
+  HUT('reg_ridge', 'ridgeway', -98, -16, 'Glass Highlands'),
+  HUT('reg_pine', 'pinecrest', -84, -2, 'Glass Highlands'),
+  HUT('reg_west', 'westmoor', -96, 16, 'Lightmoor'),
+  HUT('reg_fern', 'fernbank', -86, 36, 'Lightmoor'),
+  HUT('reg_elm', 'elmford', -62, 38, 'Lightmoor'),
 
-  N('pop_isla', 'pop', 'Isla Verde Central Office', 86, -2, ['backbone', 'regional'], { role: 'Island ROADM hub and ring head-end' }),
-  HUT('reg_palm', 'palmtown', 100, -22, 'Isla Verde'),
-  HUT('reg_reef', 'reefside', 84, 22, 'Isla Verde'),
-  N('dc_isla', 'dc', 'Isla Verde DC', 96, 12, ['dci'], { role: 'Island edge data center' }),
+  N('pop_isla', 'pop', 'Coherent Isle Central Office', 86, -2, ['backbone', 'regional'], { role: 'Island ROADM hub and ring head-end' }),
+  HUT('reg_palm', 'palmtown', 100, -22, 'Coherent Isle'),
+  HUT('reg_reef', 'reefside', 84, 22, 'Coherent Isle'),
+  N('dc_isla', 'dc', 'Coherent Isle DC', 96, 12, ['dci'], { role: 'Island edge data center' }),
 
-  N('cls_port', 'cls', 'Capitalia Landing Station', 39, 22, ['submarine'], { role: 'Lands the Isla Verde and Southfield cables' }),
-  N('cls_isla_w', 'cls', 'Isla West Landing Station', 74, 8, ['submarine'], { role: 'Lands the cable from Capitalia' }),
-  N('cls_isla_s', 'cls', 'Isla South Landing Station', 94, 31, ['submarine'], { role: 'Lands the cable to Gateway Bay' }),
-  N('cls_west', 'cls', 'Westmoor Landing Station', -106, 14, ['submarine'], { role: 'Lands the cable to Edgewater' }),
+  N('cls_port', 'cls', 'Lumen City Landing Station', 39, 22, ['submarine'], { role: 'Lands the Coherent Isle and Framefield cables' }),
+  N('cls_isla_w', 'cls', 'Coherent Isle West Landing Station', 74, 8, ['submarine'], { role: 'Lands the cable from Lumen City' }),
+  N('cls_isla_s', 'cls', 'Coherent Isle South Landing Station', 94, 31, ['submarine'], { role: 'Lands the cable to Gateway Bay' }),
+  N('cls_west', 'cls', 'Lightmoor Landing Station', -106, 14, ['submarine'], { role: 'Lands the cable to Edgewater' }),
 
   // ---- side B: data network
   CORE('cr_c1', 'Coreburg core 1', -7, -7, 'Core router, one of the redundant pair in Coreburg'),
@@ -287,7 +287,7 @@ const PLACED = [
   CORE('cr_gw', 'Gateway Bay core', -46, 12, 'Core router at the coast, next to the internet exchange'),
   CORE('cr_north', 'Northport core', -12, -32, 'Core router for the north coast'),
   CORE('cr_edge', 'Edgewater core', 44, -18, 'Core router for the east'),
-  CORE('cr_south', 'Southfield core', 30, 28, 'Core router for the south'),
+  CORE('cr_south', 'Framefield core', 30, 28, 'Core router for the south'),
   NB('ixp_gw', 'ixp', 'Gateway Bay Internet Exchange', -58, 6, ['ipcore'], { role: 'Peering with content and cloud networks' }),
   NB('dc_cloud', 'dc', 'Coreburg Cloud DC', -16, 15, ['ipcore'], { role: 'Cloud region, dual-homed to both Coreburg core routers' }),
   NB('dc_5gc', 'dc', 'Coreburg 5G Core', 24, -10, ['ipcore'], { role: 'Mobile core: user plane and control plane for the 5G network' }),
@@ -303,9 +303,9 @@ const PLACED = [
   XHUB('xh_south', 'southfield', 40, 36),
   XHUB('xh_leaf', 'leafdale', -26, 36),
 
-  NB('cls_gw', 'cls', 'Gateway Bay Landing Station', 0, 0, ['submarine'], { role: 'Lands the cable from Isla Verde', coastOf: 'gateway', toward: [-120, 10] }),
-  NB('cls_south', 'cls', 'Southfield Landing Station', 0, 0, ['submarine'], { role: 'Lands the cable from Capitalia', coastOf: 'southfield', toward: [60, 80] }),
-  NB('cls_edge', 'cls', 'Edgewater Landing Station', 0, 0, ['submarine'], { role: 'Lands the cable from Westmoor', coastOf: 'edgewater', toward: [120, -20] }),
+  NB('cls_gw', 'cls', 'Gateway Bay Landing Station', 0, 0, ['submarine'], { role: 'Lands the cable from Coherent Isle', coastOf: 'gateway', toward: [-120, 10] }),
+  NB('cls_south', 'cls', 'Framefield Landing Station', 0, 0, ['submarine'], { role: 'Lands the cable from Lumen City', coastOf: 'southfield', toward: [60, 80] }),
+  NB('cls_edge', 'cls', 'Edgewater Landing Station', 0, 0, ['submarine'], { role: 'Lands the cable from Lightmoor', coastOf: 'edgewater', toward: [120, -20] }),
 ];
 
 // ---------------------------------------------------------------- links
@@ -319,7 +319,7 @@ const LINKS = [
   L('dci', 'dc_se', 'dc_sw'),
   L('dci', 'dc_sw', 'dc_nw'),
   L('dci', 'dc_se', 'cls_port', { note: 'Hands DCI waves to the subsea cables' }),
-  L('dci', 'dc_isla', 'cls_isla_w', { note: 'Picks up DCI waves from the Capitalia cable' }),
+  L('dci', 'dc_isla', 'cls_isla_w', { note: 'Picks up DCI waves from the Lumen City cable' }),
 
   L('metro', 'hub_n', 'hub_e'),
   L('metro', 'hub_e', 'hub_s', { via: [[27, 24]] }),
@@ -358,12 +358,12 @@ const LINKS = [
   L('regional', 'reg_palm', 'reg_reef', { via: [[112, 8]] }),
   L('regional', 'reg_reef', 'pop_isla', { via: [[80, 10]] }),
 
-  // submarine: one cable within Netlandia, three that wrap round the planet to Packetland.
+  // submarine: one cable within Photonia, three that wrap round the planet to Packetland.
   // Waypoints on a cross-side cable carry their side: [x, z, side].
-  L('submarine', 'cls_port', 'cls_isla_w', { sea: true, via: [[50, 30], [62, 22]], name: 'Capitalia – Isla Verde cable' }),
-  L('submarine', 'cls_isla_s', 'cls_gw', { sea: true, cross: true, via: [[112, 52, 0], [-118, 40, 1]], name: 'Isla – Gateway Bay cable' }),
-  L('submarine', 'cls_port', 'cls_south', { sea: true, cross: true, via: [[52, 56, 0], [110, 96, 0], [-60, 96, 1], [30, 68, 1]], name: 'Capitalia – Southfield cable' }),
-  L('submarine', 'cls_west', 'cls_edge', { sea: true, cross: true, via: [[-128, 30, 0], [116, 10, 1]], name: 'Westmoor – Edgewater cable' }),
+  L('submarine', 'cls_port', 'cls_isla_w', { sea: true, via: [[50, 30], [62, 22]], name: 'Lumen City – Coherent Isle cable' }),
+  L('submarine', 'cls_isla_s', 'cls_gw', { sea: true, cross: true, via: [[112, 52, 0], [-118, 40, 1]], name: 'Coherent Isle – Gateway Bay cable' }),
+  L('submarine', 'cls_port', 'cls_south', { sea: true, cross: true, via: [[52, 56, 0], [110, 96, 0], [-60, 96, 1], [30, 68, 1]], name: 'Lumen City – Framefield cable' }),
+  L('submarine', 'cls_west', 'cls_edge', { sea: true, cross: true, via: [[-128, 30, 0], [116, 10, 1]], name: 'Lightmoor – Edgewater cable' }),
 
   // ---- side B: data network
   // IP core: a mesh, every router with three or more neighbours
@@ -611,9 +611,9 @@ const near = (w, id, c, r) => Math.hypot(w.byId[id].x - c.x, w.byId[id].z - c.z)
 export const MAJORS = [
   {
     id: 'submarine', side: 0, name: 'Submarine network', color: LAYER.submarine.color, layers: ['submarine'],
-    blurb: 'Cables on the sea floor from Capitalia, Isla Verde and Westmoor, three of them wrapping round the planet to land in Packetland, with repeaters spaced along the seabed.',
-    place: 'The strait, Isla Verde and the ocean, all the way round',
-    // a region on both sides: the strait and Isla Verde, the open ocean, and the
+    blurb: 'Cables on the sea floor from Lumen City, Coherent Isle and Lightmoor, three of them wrapping round the planet to land in Packetland, with repeaters spaced along the seabed.',
+    place: 'The strait, Coherent Isle and the ocean, all the way round',
+    // a region on both sides: the strait and Coherent Isle, the open ocean, and the
     // three landing coasts of Packetland ([x, z, r, side]; side defaults to A)
     both: true,
     region: [[58, 22, 22], [92, 6, 22], [96, 30, 16], [112, 46, 18], [-122, 16, 18], [70, 70, 20], [-140, 30, 20],
@@ -622,23 +622,23 @@ export const MAJORS = [
   },
   {
     id: 'longhaul', side: 0, name: 'Long-haul RLS mesh', color: LAYER.backbone.color, layers: ['backbone'],
-    blurb: 'The countrywide line system: eight ROADM sites in a mesh, every one with three or more routes, amplifier huts along each span, landing on three Capitalia metro hubs.',
-    place: 'The heartland between the ROADM towns',
+    blurb: 'The countrywide line system: eight ROADM sites in a mesh, every one with three or more routes, amplifier huts along each span, landing on three Lumen City metro hubs.',
+    place: 'The Wavelands, between the ROADM towns',
     region: [[-38, -2, 36], [-62, -22, 14], [-40, 32, 14], [-16, 28, 12]],
     owns: (l, w) => l.layer === 'backbone' && ![l.a, l.b].some((id) => w.byId[id].type === 'cls' || w.byId[id].x > 60),
   },
   {
-    id: 'metro', side: 0, name: 'Capitalia metro optical', color: LAYER.metro.color, layers: ['metro', 'dci'],
+    id: 'metro', side: 0, name: 'Lumen City metro optical', color: LAYER.metro.color, layers: ['metro', 'dci'],
     area: { ...METRO, r: 24 },
-    blurb: 'Downtown Capitalia: four metro hubs on a packet-optical ring, and four data centers on their own DCI ring, the harbor campus handing off to the subsea cables.',
-    place: 'Capitalia and its data center campuses',
+    blurb: 'Downtown Lumen City: four metro hubs on a packet-optical ring, and four data centers on their own DCI ring, the harbor campus handing off to the subsea cables.',
+    place: 'Lumen City and its data center campuses',
     region: [[18, 12, 31]],
     owns: (l, w) => ['metro', 'dci'].includes(l.layer) && [l.a, l.b].every((id) => near(w, id, METRO, 36)),
   },
   {
     id: 'ipcore', side: 1, name: 'IP/MPLS core', color: LAYER.ipcore.color, layers: ['ipcore'],
     blurb: 'Six core routers in a mesh, every one with three or more neighbours: a redundant pair in Coreburg and one in each corner of Packetland, peering at the Gateway Bay internet exchange and serving the cloud and 5G core data centers.',
-    place: 'Gateway Bay, Northport, Edgewater and Southfield',
+    place: 'Gateway Bay, Northport, Edgewater and Framefield',
     region: [[-52, 12, 16], [-12, -34, 11], [46, -20, 14], [32, 30, 10]],
     owns: (l) => l.layer === 'ipcore',
   },
@@ -653,7 +653,7 @@ export const MAJORS = [
   {
     id: 'xhaul', side: 1, name: '5G mobile xhaul', color: LAYER.xhaul.color, layers: ['xhaul'],
     blurb: 'A ring round the Packetland countryside: cell sites between five pre-aggregation hubs, uplinked into the IP core at Gateway Bay and Edgewater, on to the 5G core.',
-    place: 'The countryside and its cell towers',
+    place: 'The Spine ring of cell towers',
     region: [[-34, -20, 13], [-4, -46, 10], [16, -42, 12], [36, -40, 11], [52, 6, 14], [38, 40, 12], [6, 44, 13], [-22, 38, 12], [-32, 12, 11]],
     owns: (l) => l.layer === 'xhaul',
   },

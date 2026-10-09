@@ -1,6 +1,6 @@
 # Ciena Explorer — Netlandia
 
-A cartoon 3D globe with a country on each face. **Side A**, Netlandia, carries the
+A cartoon 3D globe called Netlandia, with a country on each face. **Side A**, Photonia, carries the
 transport networks. **Side B**, Packetland, carries the data network that rides on
 them. Spin the planet all the way round, or flip sides from the panel, then click
 one of the six major networks to open it on its own in open space, where every
@@ -19,13 +19,13 @@ network is a **region** of its country. Hover a region and the ground there tint
 in that network's colour and its landmarks lift; click it to open the network.
 An airliner circles the planet between the two countries.
 
-**Side A, Netlandia (transport)** is laid out in three bands so the networks don't
+**Side A, Photonia (transport)** is laid out in three bands so the networks don't
 pile up: regional rings through the western towns, the countrywide RLS mesh across
-the middle, and the Capitalia metro on the east coast. Isla Verde, off the east coast, is
+the middle, and the Lumen City metro on the east coast. Coherent Isle, off the east coast, is
 the stepping stone for the subsea cables.
 
 **The submarine network wraps round the planet.** Its region runs from the strait
-and Isla Verde across the ocean to Packetland's three landing coasts, so it can be
+and Coherent Isle across the ocean to Packetland's three landing coasts, so it can be
 found, and opened, from either side; both sides' panels list it.
 
 **Side B, Packetland (data network)** has Coreburg in the middle with its pair of
@@ -41,8 +41,8 @@ entry in the panel, opens it.
 | side | network | what's in it | example Ciena gear |
 |---|---|---|---|
 | A | Submarine network | 4 cables, 7 landing stations, 61 repeaters; 3 cables cross to side B | GeoMesh Extreme |
-| A | Long-haul RLS mesh | 8 ROADMs, each with 3+ routes, 21 amplifier huts, landing on 3 Capitalia hubs | RLS with WaveLogic 6 |
-| A | Capitalia metro optical | 4 metro hubs on a packet-optical ring, 4 data centers on a DCI ring | RLS, Waveserver |
+| A | Long-haul RLS mesh | 8 ROADMs, each with 3+ routes, 21 amplifier huts, landing on 3 Lumen City hubs | RLS with WaveLogic 6 |
+| A | Lumen City metro optical | 4 metro hubs on a packet-optical ring, 4 data centers on a DCI ring | RLS, Waveserver |
 | B | IP/MPLS core | 6 core routers in a mesh, an internet exchange, cloud and 5G core data centers | 8100 Coherent Routers |
 | B | Metro aggregation | a segment-routed ring round Coreburg on both core routers, 6 business customers on rings | 5170, 3900 series |
 | B | 5G mobile xhaul | 5 pre-aggregation hubs and 7 cell sites on a ring, uplinked into the core at 2 points | 5164, 5166 |
@@ -76,8 +76,8 @@ its route, a queue readout fills, a fault alarm appears where it would.
 
 | network | topics |
 |---|---|
-| Long-haul RLS mesh | the line system and its amplifiers · **CDC ROADMs** (colorless, directionless, contentionless, at the five-degree Junction site) · mesh restoration round a fibre cut |
-| Capitalia metro optical | fixed two-degree **ROADM ring** · ring protection · data center interconnect |
+| Long-haul RLS mesh | the line system and its amplifiers · **CDC ROADMs** (colorless, directionless, contentionless, at the five-degree Crosspoint site) · mesh restoration round a fibre cut |
+| Lumen City metro optical | fixed two-degree **ROADM ring** · ring protection · data center interconnect |
 | Submarine | line terminals, repeaters and spectrum sharing |
 | IP/MPLS core | **segment routing (SR-MPLS)**, a label stack that pops hop by hop · TI-LFA fast reroute |
 | Metro aggregation | **G.8032** ring protection (RPL, R-APS, flush) · low-cost Ethernet aggregation (E-Line, no MPLS at the edge) · **QoS** queues on the uplink · **CFM** heartbeats and loss of continuity |
