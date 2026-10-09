@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Netlandia Network Map</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="css/net.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/" } }
+</script>
+</head>
+<body>
+<!--HUD-->
+<div id="app">
+  <canvas id="view" aria-label="3D map of Netlandia's networks"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <header class="title">
+    <h1>Netlandia</h1>
+    <p>Six Ciena networks, one tiny country</p>
+  </header>
+
+  <nav class="panel" aria-label="Network layers">
+    <h2>Networks</h2>
+    <ul id="layers"></ul>
+    <div class="tools">
+      <button id="btn-tour" class="primary" aria-pressed="false">Take the tour</button>
+      <button id="btn-all">Show everything</button>
+    </div>
+    <div class="opts" role="group" aria-label="Display">
+      <button data-opt="traffic" aria-pressed="true">Traffic</button>
+      <button data-opt="labels" aria-pressed="true">Labels</button>
+      <button data-opt="clouds" aria-pressed="true">Clouds</button>
+    </div>
+  </nav>
+
+  <section id="caption" class="caption" hidden aria-live="polite">
+    <span class="cap-k"></span>
+    <h3 class="cap-t"></h3>
+    <p class="cap-b"></p>
+    <p class="cap-g"></p>
+    <div class="cap-btns">
+      <button id="cap-next" class="primary">Next layer</button>
+      <button id="cap-close">Show everything</button>
+    </div>
+  </section>
+
+  <aside id="card" class="card" hidden aria-live="polite">
+    <button id="card-close" class="x" aria-label="Close">&times;</button>
+    <span class="card-k"></span>
+    <h3 class="card-t"></h3>
+    <div class="card-layers"></div>
+    <p class="card-role"></p>
+    <dl><dt>Equipment</dt><dd class="card-gear"></dd></dl>
+    <h4 class="card-links-h">Connects to</h4>
+    <ul class="card-links"></ul>
+  </aside>
+
+  <p class="hint">Drag to pan · Right-drag to turn and tilt · Scroll or pinch to zoom · Click anything</p>
+</div>
+<!--/HUD-->
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

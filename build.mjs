@@ -1,0 +1,47 @@
+// Bundle the map into one self-contained HTML page (three.js from jsDelivr).
+//   node build.mjs  ->  dist/netlandia.html
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const read = (p) => readFileSync(join(here, p), 'utf8');
+
+// --local points at the vendored copy instead, for checking the bundle offline.
+const local = process.argv.includes('--local');
+const THREE_URL = local ? '../vendor/three.module.min.js' : 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const ORBIT_URL = local ? '../vendor/OrbitControls.js' : 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+// Local modules, dependencies first. Their own imports of each other are dropped
+// and `export` keywords stripped, so they share one module scope.
+const modules = ['js/world.js', 'js/scene.js', 'js/main.js'].map((p) => read(p)
+  .replace(/^import [^;]*? from '\.\/[^']+';\n/gm, '')
+  .replace(/^export (const|function|let)/gm, '$1'));
+const threeImports = new Set();
+const body = modules.map((m) => m.replace(/^import .* from 'three(\/addons\/[^']+)?';\n/gm, (line) => { threeImports.add(line.trim()); return ''; }));
+
+const html = read('index.html');
+const hud = html.slice(html.indexOf('<!--HUD-->'), html.indexOf('<!--/HUD-->') + '<!--/HUD-->'.length);
+const title = html.match(/<title>.*<\/title>/)[0];
+const fonts = html.match(/<link rel="preconnect"[^>]*>\n<link rel="stylesheet" href="https:\/\/fonts[^>]*>/)[0];
+
+const out = `<meta charset="utf-8">
+${title}
+${fonts}
+<style>
+${read('css/net.css')}
+</style>
+<script type="importmap">
+{ "imports": { "three": "${THREE_URL}", "three/addons/OrbitControls.js": "${ORBIT_URL}" } }
+</script>
+${hud}
+<script type="module">
+${[...threeImports].join('\n')}
+${body.join('\n')}
+</script>
+`;
+
+mkdirSync(join(here, 'dist'), { recursive: true });
+const name = local ? 'dist/netlandia.local.html' : 'dist/netlandia.html';
+writeFileSync(join(here, name), out);
+console.log(`${name}  ${(out.length / 1024).toFixed(1)} KB`);

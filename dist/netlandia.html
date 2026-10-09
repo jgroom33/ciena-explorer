@@ -1,0 +1,1779 @@
+<meta charset="utf-8">
+<title>Netlandia Network Map</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Board-game HUD: sticker cards with ink outlines over a sky, the map fills the screen.
+   Deliberately a single daylight look, so every colour is set here explicitly. */
+:root {
+  --ink: #1d2a44;
+  --paper: #ffffff;
+  --sky-1: #a9dcff;
+  --sky-2: #e3f4ff;
+  --muted: #56627a;
+  --accent: #2f80ed;
+  --display: 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
+  --body: 'Nunito', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  --line: 2.5px solid var(--ink);
+  --lift: 0 4px 0 var(--ink);
+  color-scheme: light;
+}
+
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at 50% 30%, var(--sky-2), var(--sky-1));
+  color: var(--ink);
+  font: 500 14px/1.4 var(--body);
+  overflow: hidden;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+#app { position: relative; height: 100%; overflow: hidden; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+/* ------------------------------------------------ labels on the map */
+.lbl { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; }
+.lbl.city {
+  font: 400 15px/1 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--paper);
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--ink);
+}
+.lbl.city.big { font-size: 21px; }
+.lbl.city.town { font-size: 12.5px; -webkit-text-stroke-width: 3px; text-shadow: 0 2px 0 var(--ink); }
+.lbl.tag {
+  font: 800 11px/1 var(--body);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-left: 7px solid var(--c);
+  border-radius: 6px;
+  padding: 3px 6px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+.lbl.tip {
+  display: grid; gap: 1px;
+  background: var(--paper); border: var(--line); border-radius: 10px;
+  padding: 6px 10px; box-shadow: var(--lift);
+  border-top: 6px solid var(--c);
+}
+.lbl.tip b { font: 400 15px/1.1 var(--display); letter-spacing: 0.01em; }
+.lbl.tip span { font-size: 12px; color: var(--muted); font-weight: 700; }
+
+/* ------------------------------------------------ HUD pieces */
+.title, .panel, .card, .caption {
+  position: absolute;
+  background: var(--paper);
+  border: var(--line);
+  border-radius: 16px;
+  box-shadow: var(--lift);
+}
+.title {
+  top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px;
+  padding: 8px 16px 10px;
+  transform: rotate(-1.5deg);
+}
+.title h1 {
+  margin: 0;
+  font: 400 34px/1 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  -webkit-text-stroke: 1.5px var(--ink);
+  paint-order: stroke fill;
+}
+.title p { margin: 2px 0 0; font-weight: 800; font-size: 13px; color: var(--muted); }
+
+.panel {
+  top: calc(102px + env(safe-area-inset-top, 0px)); left: 16px;
+  width: 268px;
+  padding: 12px;
+  display: grid; gap: 10px;
+  max-height: calc(100% - 160px);
+  overflow: auto;
+}
+.panel h2 { margin: 0 2px; font: 400 13px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+#layers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.layer { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.toggle {
+  display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 9px;
+  text-align: left; padding: 6px 8px;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 10px;
+  box-shadow: 0 2px 0 var(--ink);
+  min-width: 0;
+}
+.toggle:active, .focus:active, .tools button:active, .opts button:active, .cap-btns button:active { transform: translateY(2px); box-shadow: none; }
+.wire {
+  height: 10px; border-radius: 6px; background: var(--c);
+  border: 2px solid var(--ink);
+  position: relative;
+}
+.wire::after { content: ''; position: absolute; top: 1px; left: 3px; width: 5px; height: 4px; border-radius: 3px; background: rgb(255 255 255 / 0.8); }
+.txt { display: grid; min-width: 0; }
+.nm { font-weight: 800; font-size: 13.5px; line-height: 1.15; }
+.st { font-size: 11.5px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.toggle[aria-pressed="false"] { background: #eef1f6; box-shadow: none; transform: translateY(2px); }
+.toggle[aria-pressed="false"] .wire { background: transparent; border-style: dashed; }
+.toggle[aria-pressed="false"] .wire::after { display: none; }
+.toggle[aria-pressed="false"] .nm { color: var(--muted); }
+.focus {
+  width: 38px; display: grid; place-items: center;
+  background: var(--c); border: 2px solid var(--ink); border-radius: 10px; box-shadow: 0 2px 0 var(--ink);
+}
+.focus svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; }
+
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tools button, .cap-btns button {
+  padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px;
+  background: var(--paper); box-shadow: 0 2px 0 var(--ink); font-weight: 800;
+}
+button.primary { background: var(--accent); color: var(--paper); }
+.opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.opts button {
+  flex: 1; padding: 4px 8px; font-size: 12px; font-weight: 800;
+  border: 2px solid var(--ink); border-radius: 999px; background: var(--paper);
+}
+.opts button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* tour / layer caption */
+.caption {
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  width: min(520px, calc(100% - 32px));
+  padding: 12px 16px 14px;
+  border-top: 10px solid var(--c);
+  display: grid; gap: 4px;
+}
+.cap-k { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.caption h3 { margin: 0; font: 400 24px/1.05 var(--display); letter-spacing: 0.01em; text-wrap: balance; }
+.caption p { margin: 0; max-width: 62ch; }
+.cap-g { font-size: 12.5px; font-weight: 800; color: var(--muted); }
+.cap-g::before { content: 'Built with '; font-weight: 700; }
+.cap-btns { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+
+/* info card */
+.card {
+  top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px;
+  width: 300px;
+  padding: 14px 16px 16px;
+  border-top: 10px solid var(--c);
+  max-height: calc(100% - 80px); overflow: auto;
+}
+.card .x {
+  position: absolute; top: 6px; right: 8px; width: 30px; height: 30px;
+  border: 2px solid var(--ink); border-radius: 50%; background: var(--paper);
+  font-size: 20px; line-height: 1; padding: 0;
+}
+.card-k { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.card h3 { margin: 2px 36px 6px 0; font: 400 23px/1.05 var(--display); letter-spacing: 0.01em; text-wrap: balance; }
+.card-layers { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip {
+  font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+  border: 2px solid var(--ink); background: var(--c);
+}
+.card-role { margin: 8px 0; }
+.card dl { margin: 0; padding: 8px 10px; background: #eef4fb; border-radius: 10px; }
+.card dt { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.card dd { margin: 2px 0 0; font-weight: 800; }
+.card h4 { margin: 12px 0 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.card-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.card-links button {
+  border: 2px solid var(--ink); background: var(--paper); border-radius: 8px;
+  padding: 2px 8px; font-size: 12.5px; font-weight: 700;
+}
+.card-links button:hover { background: #eef4fb; }
+
+.hint {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  margin: 0; padding: 4px 12px; border-radius: 999px;
+  background: rgb(29 42 68 / 0.82); color: var(--paper);
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis;
+}
+.caption:not([hidden]) ~ .hint { display: none; }
+
+@media (max-width: 760px) {
+  .title { padding: 6px 12px 8px; }
+  .title h1 { font-size: 26px; }
+  .title p { font-size: 12px; }
+  .panel {
+    top: auto; left: 16px; right: 16px; width: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 8px; gap: 6px;
+    max-height: 42%;
+  }
+  .panel h2 { display: none; }
+  #layers { grid-template-columns: 1fr 1fr; }
+  .layer { grid-template-columns: 1fr; }
+  .focus { display: none; }
+  .toggle { grid-template-columns: 20px 1fr; gap: 6px; padding: 5px 6px; }
+  .st { display: none; }
+  .nm { font-size: 12px; }
+  .hint { display: none; }
+  .card { top: auto; left: 16px; right: 16px; width: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-height: 55%; z-index: 2; }
+  .caption { bottom: auto; top: calc(78px + env(safe-area-inset-top, 0px)); z-index: 1; }
+  .caption .cap-g { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js" } }
+</script>
+<!--HUD-->
+<div id="app">
+  <canvas id="view" aria-label="3D map of Netlandia's networks"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <header class="title">
+    <h1>Netlandia</h1>
+    <p>Six Ciena networks, one tiny country</p>
+  </header>
+
+  <nav class="panel" aria-label="Network layers">
+    <h2>Networks</h2>
+    <ul id="layers"></ul>
+    <div class="tools">
+      <button id="btn-tour" class="primary" aria-pressed="false">Take the tour</button>
+      <button id="btn-all">Show everything</button>
+    </div>
+    <div class="opts" role="group" aria-label="Display">
+      <button data-opt="traffic" aria-pressed="true">Traffic</button>
+      <button data-opt="labels" aria-pressed="true">Labels</button>
+      <button data-opt="clouds" aria-pressed="true">Clouds</button>
+    </div>
+  </nav>
+
+  <section id="caption" class="caption" hidden aria-live="polite">
+    <span class="cap-k"></span>
+    <h3 class="cap-t"></h3>
+    <p class="cap-b"></p>
+    <p class="cap-g"></p>
+    <div class="cap-btns">
+      <button id="cap-next" class="primary">Next layer</button>
+      <button id="cap-close">Show everything</button>
+    </div>
+  </section>
+
+  <aside id="card" class="card" hidden aria-live="polite">
+    <button id="card-close" class="x" aria-label="Close">&times;</button>
+    <span class="card-k"></span>
+    <h3 class="card-t"></h3>
+    <div class="card-layers"></div>
+    <p class="card-role"></p>
+    <dl><dt>Equipment</dt><dd class="card-gear"></dd></dl>
+    <h4 class="card-links-h">Connects to</h4>
+    <ul class="card-links"></ul>
+  </aside>
+
+  <p class="hint">Drag to pan · Right-drag to turn and tilt · Scroll or pinch to zoom · Click anything</p>
+</div>
+<!--/HUD-->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/OrbitControls.js';
+// The world of Netlandia: terrain, places and every network, as plain data.
+// No three.js in here, so the tests can check it under node.
+
+const BOARD = { x0: -130, x1: 130, z0: -88, z1: 88 };
+const SEA_FLOOR = -14;
+
+// ---------------------------------------------------------------- noise
+
+function hash(ix, iz) {
+  let h = (ix * 374761393 + iz * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+const smooth = (t) => t * t * (3 - 2 * t);
+function valueNoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = smooth(x - ix), fz = smooth(z - iz);
+  const a = hash(ix, iz), b = hash(ix + 1, iz), c = hash(ix, iz + 1), d = hash(ix + 1, iz + 1);
+  return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fz;
+}
+function fbm(x, z) {
+  let s = 0, amp = 0.5, f = 1;
+  for (let i = 0; i < 4; i++) { s += amp * (valueNoise(x * f, z * f) * 2 - 1); amp *= 0.5; f *= 2.03; }
+  return s;
+}
+function smoothstep(a, b, x) {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+// ---------------------------------------------------------------- land
+
+// Each blob is an ellipse of land; the coast is where the best blob reaches zero.
+const BLOBS = [
+  [-50, 0, 62, 50],    // western heartland
+  [-5, 12, 48, 42],    // the Portsea lowlands
+  [-78, -35, 32, 28],  // northern highlands
+  [-15, -40, 42, 26],  // Midhill plateau
+  [95, 2, 24, 34],     // Isla Verde
+  [108, -30, 14, 14],  // Palm Point
+];
+
+// > 0 on land, < 0 at sea. Roughly the fraction of the way in from the coast.
+function landness(x, z) {
+  let f = -Infinity;
+  for (const [cx, cz, rx, rz] of BLOBS) {
+    const dx = (x - cx) / rx, dz = (z - cz) / rz;
+    f = Math.max(f, 1 - (dx * dx + dz * dz));
+  }
+  return f + fbm(x * 0.045, z * 0.045) * 0.14;
+}
+
+const MOUNTAINS = [
+  [-88, -44, 16, 14],
+  [-70, -56, 10, 9],
+  [-100, -24, 10, 7],
+  [104, -32, 6, 5],
+];
+
+function rawHeight(x, z) {
+  const f = landness(x, z);
+  if (f <= 0) return SEA_FLOOR * smoothstep(0, 0.32, -f) - 0.6 * (1 - smoothstep(0, 0.32, -f));
+  let h = 0.4 + smoothstep(0, 0.25, f) * 2.2 + Math.max(0, fbm(x * 0.06 + 7, z * 0.06 - 3)) * 5;
+  for (const [mx, mz, mh, s] of MOUNTAINS) {
+    const d2 = ((x - mx) ** 2 + (z - mz) ** 2) / (s * s);
+    h += mh * Math.exp(-d2);
+  }
+  return h;
+}
+
+// Terraced, so the hills read as toy-like steps.
+const STEP = 1.6;
+function heightAt(x, z) {
+  const h = rawHeight(x, z);
+  if (h <= 0.4) return h;
+  const base = Math.floor(h / STEP) * STEP;
+  return Math.max(0.4, base + STEP * smoothstep(0.7, 1, (h - base) / STEP));
+}
+
+// ---------------------------------------------------------------- layers
+
+const LAYERS = [
+  {
+    id: 'dci', name: 'Data center interconnect', short: 'DCI', color: '#9b5de5',
+    blurb: 'Point-to-point waves between data center campuses: huge capacity, short hops, no fuss.',
+    gear: 'Ciena Waveserver with WaveLogic coherent optics',
+  },
+  {
+    id: 'regional', name: 'Regional transport', short: 'Regional', color: '#ff8c1a',
+    blurb: 'Rings that tie the towns around each metro back to its hub, protected so a single cut does not take a town offline.',
+    gear: 'Ciena 6500 Packet-Optical and Waveserver',
+  },
+  {
+    id: 'backbone', name: 'Countrywide backbone', short: 'Backbone', color: '#e63946',
+    blurb: 'Long-haul ROADM mesh between the big cities, with an amplifier hut every 80 km or so.',
+    gear: 'Ciena 6500 RLS line system with WaveLogic',
+  },
+  {
+    id: 'submarine', name: 'Submarine cable', short: 'Submarine', color: '#ffc300',
+    blurb: 'Cables on the sea floor between landing stations, with repeaters spaced along the seabed.',
+    gear: 'Ciena GeoMesh Extreme submarine networking',
+  },
+  {
+    id: 'mpls', name: 'MPLS transport', short: 'MPLS', color: '#2f80ed',
+    blurb: 'The packet layer riding on top of the optics: routers and the label-switched paths between them, drawn as arcs in the sky.',
+    gear: 'Ciena 8100 Coherent Routers and 5100 series routers',
+  },
+  {
+    id: 'access', name: 'Access network', short: 'Access', color: '#ff4fa3',
+    blurb: 'The last mile to the customer: banks, cell towers, offices, hospitals and schools.',
+    gear: 'Ciena 3900 / 5100 series access devices and NIDs',
+  },
+];
+const LAYER = Object.fromEntries(LAYERS.map((l) => [l.id, l]));
+
+// ---------------------------------------------------------------- places
+
+const CITIES = [
+  { id: 'capitalia', name: 'Capitalia', x: -40, z: 6, r: 12, big: true, tall: 1.0 },
+  { id: 'portsea', name: 'Portsea', x: 20, z: 22, r: 9, big: true, tall: 0.7 },
+  { id: 'northgate', name: 'Northgate', x: -60, z: -40, r: 7, tall: 0.45 },
+  { id: 'southvale', name: 'Southvale', x: -30, z: 42, r: 7, tall: 0.45 },
+  { id: 'midhill', name: 'Midhill', x: -4, z: -32, r: 6, tall: 0.4 },
+  { id: 'westmoor', name: 'Westmoor', x: -90, z: 8, r: 6, tall: 0.35 },
+  { id: 'isla', name: 'Isla Verde', x: 92, z: 6, r: 7, big: true, tall: 0.55 },
+  { id: 'elmford', name: 'Elmford', x: -64, z: 26, r: 3.5, town: true },
+  { id: 'brookby', name: 'Brookby', x: -12, z: 28, r: 3.5, town: true },
+  { id: 'ashton', name: 'Ashton', x: -16, z: -8, r: 3.5, town: true },
+  { id: 'pinecrest', name: 'Pinecrest', x: -70, z: -14, r: 3.5, town: true },
+  { id: 'cove', name: 'Cove', x: 24, z: 38, r: 3, town: true },
+  { id: 'dunmore', name: 'Dunmore', x: 6, z: 2, r: 3, town: true },
+  { id: 'palmtown', name: 'Palmtown', x: 104, z: -26, r: 3, town: true },
+  { id: 'reefside', name: 'Reefside', x: 88, z: 26, r: 3, town: true },
+];
+const CITY = Object.fromEntries(CITIES.map((c) => [c.id, c]));
+
+// Hand-placed equipment. Access gear and amplifiers are generated below.
+const N = (id, type, name, x, z, layers, extra = {}) => ({ id, type, name, x, z, layers, ...extra });
+
+const PLACED = [
+  // data centers
+  N('dc_cap1', 'dc', 'Capitalia DC-1', -57, 16, ['dci'], { role: 'Colocation campus west of the capital' }),
+  N('dc_cap2', 'dc', 'Capitalia DC-2', -26, 16, ['dci'], { role: 'Enterprise and cloud on-ramp campus' }),
+  N('dc_north', 'dc', 'Northgate Cloud Campus', -46, -50, ['dci'], { role: 'Hyperscale campus, cheap hydro power from the hills', size: 1.4 }),
+  N('dc_port', 'dc', 'Portsea DC', 30, 8, ['dci'], { role: 'Harbor-side carrier hotel next to the cable landing' }),
+  N('dc_isla', 'dc', 'Isla Verde DC', 99, 16, ['dci'], { role: 'Island edge data center' }),
+
+  // backbone points of presence (ROADM sites)
+  N('pop_cap', 'pop', 'Capitalia Central Office', -46, -6, ['backbone', 'regional'], { role: 'Backbone ROADM hub and regional ring head-end' }),
+  N('pop_port', 'pop', 'Portsea Central Office', 14, 14, ['backbone', 'regional'], { role: 'Backbone ROADM and Portsea ring head-end' }),
+  N('pop_north', 'pop', 'Northgate PoP', -56, -32, ['backbone'], { role: 'Backbone ROADM site' }),
+  N('pop_south', 'pop', 'Southvale PoP', -36, 34, ['backbone'], { role: 'Backbone ROADM site' }),
+  N('pop_mid', 'pop', 'Midhill PoP', 0, -24, ['backbone'], { role: 'Backbone ROADM site on the plateau' }),
+  N('pop_west', 'pop', 'Westmoor PoP', -86, 16, ['backbone'], { role: 'Backbone ROADM site' }),
+  N('pop_isla', 'pop', 'Isla Verde Central Office', 86, -2, ['backbone', 'regional'], { role: 'Island ROADM hub and ring head-end' }),
+
+  // regional ring sites
+  N('reg_elm', 'regional', 'Elmford hut', -60, 22, ['regional'], { role: 'Ring site on the Capitalia regional ring' }),
+  N('reg_brook', 'regional', 'Brookby hut', -16, 24, ['regional'], { role: 'Ring site on the Capitalia regional ring' }),
+  N('reg_ash', 'regional', 'Ashton hut', -20, -12, ['regional'], { role: 'Ring site on the Capitalia regional ring' }),
+  N('reg_pine', 'regional', 'Pinecrest hut', -66, -18, ['regional'], { role: 'Ring site on the Capitalia regional ring' }),
+  N('reg_cove', 'regional', 'Cove hut', 20, 36, ['regional'], { role: 'Ring site on the Portsea ring' }),
+  N('reg_dun', 'regional', 'Dunmore hut', 2, 5, ['regional'], { role: 'Ring site on the Portsea ring' }),
+  N('reg_palm', 'regional', 'Palmtown hut', 100, -22, ['regional'], { role: 'Ring site on the Isla Verde ring' }),
+  N('reg_reef', 'regional', 'Reefside hut', 84, 22, ['regional'], { role: 'Ring site on the Isla Verde ring' }),
+
+  // cable landing stations
+  N('cls_port', 'cls', 'Portsea Landing Station', 38, 22, ['submarine'], { role: 'Lands the Isla Verde cable' }),
+  N('cls_isla_w', 'cls', 'Isla West Landing Station', 74, 8, ['submarine'], { role: 'Lands the Portsea cable' }),
+  N('cls_isla_s', 'cls', 'Isla South Landing Station', 94, 31, ['submarine'], { role: 'Lands the Farland trans-ocean cable' }),
+  N('cls_west', 'cls', 'Westmoor Landing Station', -106, 12, ['submarine'], { role: 'Lands the Westerland cable' }),
+  N('edge_far', 'edge', 'To Farland', 124, 84, ['submarine'], { role: 'Trans-ocean cable continues off the map' }),
+  N('edge_west', 'edge', 'To Westerland', -126, 60, ['submarine'], { role: 'Cable continues off the map' }),
+];
+
+// Routers float above the site that houses them.
+const ROUTER_SITES = [
+  ['pop_cap', 'core'], ['pop_port', 'core'], ['pop_north', 'core'], ['pop_south', 'core'],
+  ['pop_mid', 'core'], ['pop_west', 'core'], ['pop_isla', 'core'],
+  ['reg_elm', 'agg'], ['reg_brook', 'agg'], ['reg_ash', 'agg'], ['reg_pine', 'agg'],
+  ['reg_cove', 'agg'], ['reg_dun', 'agg'], ['reg_palm', 'agg'], ['reg_reef', 'agg'],
+];
+
+// ---------------------------------------------------------------- links
+
+const L = (layer, a, b, extra = {}) => ({ layer, a, b, ...extra });
+
+const LINKS = [
+  // DCI
+  L('dci', 'dc_cap1', 'dc_cap2', { note: 'Metro DCI, about 30 km' }),
+  L('dci', 'dc_cap1', 'dc_north', { via: [[-60, -20]] }),
+  L('dci', 'dc_cap2', 'dc_north', { via: [[-30, -24]] }),
+  L('dci', 'dc_cap2', 'dc_port', { via: [[0, 14]] }),
+  L('dci', 'dc_port', 'cls_port', { note: 'Hands DCI waves to the Isla Verde cable' }),
+  L('dci', 'dc_isla', 'cls_isla_w', { via: [[86, 12]], note: 'Picks up DCI waves from the Portsea cable' }),
+
+  // backbone
+  L('backbone', 'pop_west', 'pop_cap'),
+  L('backbone', 'pop_west', 'pop_north', { via: [[-78, -12]] }),
+  L('backbone', 'pop_north', 'pop_cap'),
+  L('backbone', 'pop_north', 'pop_mid', { via: [[-30, -36]] }),
+  L('backbone', 'pop_cap', 'pop_south', { via: [[-48, 18]] }),
+  L('backbone', 'pop_cap', 'pop_mid', { via: [[-22, -22]] }),
+  L('backbone', 'pop_mid', 'pop_port', { via: [[16, -8]] }),
+  L('backbone', 'pop_south', 'pop_port', { via: [[-6, 40]] }),
+  L('backbone', 'pop_port', 'cls_port'),
+  L('backbone', 'pop_isla', 'cls_isla_w'),
+  L('backbone', 'pop_isla', 'cls_isla_s', { via: [[92, 18]] }),
+  L('backbone', 'pop_west', 'cls_west'),
+
+  // regional rings
+  L('regional', 'pop_cap', 'reg_pine'),
+  L('regional', 'reg_pine', 'reg_elm', { via: [[-74, 4]] }),
+  L('regional', 'reg_elm', 'reg_brook', { via: [[-38, 28]] }),
+  L('regional', 'reg_brook', 'reg_ash', { via: [[-6, 8]] }),
+  L('regional', 'reg_ash', 'pop_cap'),
+  L('regional', 'pop_port', 'reg_cove'),
+  L('regional', 'reg_cove', 'reg_dun', { via: [[6, 24]] }),
+  L('regional', 'reg_dun', 'pop_port'),
+  L('regional', 'pop_isla', 'reg_palm'),
+  L('regional', 'reg_palm', 'reg_reef', { via: [[108, 4]] }),
+  L('regional', 'reg_reef', 'pop_isla', { via: [[80, 10]] }),
+
+  // submarine
+  L('submarine', 'cls_port', 'cls_isla_w', { sea: true, via: [[50, 30], [62, 22]], name: 'Portsea – Isla Verde cable' }),
+  L('submarine', 'cls_isla_s', 'edge_far', { sea: true, via: [[100, 48], [114, 66]], name: 'Farland trans-ocean cable' }),
+  L('submarine', 'cls_west', 'edge_west', { sea: true, via: [[-116, 26], [-118, 44]], name: 'Westerland cable' }),
+  L('submarine', 'cls_port', 'edge_far', { sea: true, via: [[46, 50], [80, 74]], name: 'Portsea – Farland cable' }),
+
+  // MPLS (router to router)
+  ...[
+    ['pop_cap', 'pop_port'], ['pop_cap', 'pop_north'], ['pop_cap', 'pop_south'], ['pop_cap', 'pop_west'],
+    ['pop_north', 'pop_west'], ['pop_mid', 'pop_port'], ['pop_mid', 'pop_north'], ['pop_south', 'pop_port'],
+    ['pop_port', 'pop_isla'], ['pop_cap', 'pop_mid'],
+    ['reg_elm', 'pop_cap'], ['reg_pine', 'pop_cap'], ['reg_ash', 'pop_cap'], ['reg_brook', 'pop_south'],
+    ['reg_brook', 'pop_cap'], ['reg_cove', 'pop_port'], ['reg_dun', 'pop_port'], ['reg_palm', 'pop_isla'], ['reg_reef', 'pop_isla'],
+  ].map(([a, b]) => L('mpls', 'rtr_' + a, 'rtr_' + b)),
+];
+
+// ---------------------------------------------------------------- access
+
+// Who hangs off each site's access network, and in which direction from it.
+const ACCESS = [
+  { site: 'pop_cap', city: 'capitalia', ends: ['bank', 'office', 'bank', 'hospital', 'tower', 'office', 'tower'] },
+  { site: 'pop_port', city: 'portsea', ends: ['bank', 'tower', 'factory', 'office', 'hospital'] },
+  { site: 'pop_north', city: 'northgate', ends: ['tower', 'school', 'bank', 'factory'] },
+  { site: 'pop_south', city: 'southvale', ends: ['tower', 'bank', 'school', 'hospital'] },
+  { site: 'pop_mid', city: 'midhill', ends: ['tower', 'school', 'bank'] },
+  { site: 'pop_west', city: 'westmoor', ends: ['tower', 'bank', 'factory'] },
+  { site: 'pop_isla', city: 'isla', ends: ['bank', 'tower', 'hotel', 'hospital', 'office'] },
+  { site: 'reg_elm', city: 'elmford', ends: ['tower', 'school', 'bank'] },
+  { site: 'reg_brook', city: 'brookby', ends: ['tower', 'bank'] },
+  { site: 'reg_ash', city: 'ashton', ends: ['tower', 'school'] },
+  { site: 'reg_pine', city: 'pinecrest', ends: ['tower', 'bank'] },
+  { site: 'reg_cove', city: 'cove', ends: ['tower', 'hotel'] },
+  { site: 'reg_dun', city: 'dunmore', ends: ['tower', 'factory'] },
+  { site: 'reg_palm', city: 'palmtown', ends: ['tower', 'hotel'] },
+  { site: 'reg_reef', city: 'reefside', ends: ['tower', 'school'] },
+];
+
+const ENDPOINT = {
+  bank: { label: 'Bank branch', gear: 'Ciena 3900 series NID, Ethernet business service' },
+  office: { label: 'Corporate office', gear: 'Ciena 3900 series NID, 10G business Ethernet' },
+  hospital: { label: 'Hospital', gear: 'Ciena 5100 series router, protected dual-homed service' },
+  school: { label: 'School', gear: 'Ciena 3900 series NID, 1G Ethernet' },
+  tower: { label: 'Cell tower', gear: 'Ciena 5100 series cell-site router, 5G fronthaul and backhaul' },
+  factory: { label: 'Factory', gear: 'Ciena 3900 series NID, private line' },
+  hotel: { label: 'Resort hotel', gear: 'Ciena 3900 series NID, business Ethernet' },
+};
+
+const NAMES = {
+  bank: ['First Coastal Bank', 'Union Savings', 'Harbor Trust', 'Capital Credit Union', 'Pinewood Bank', 'Meridian Bank', 'Valley Savings'],
+  office: ['Brightlane HQ', 'Orbis Insurance', 'Tessel Labs'],
+  hospital: ['General Hospital', 'St. Avery Clinic', 'Harbor Health', 'Island Medical'],
+  school: ['Elm Primary', 'Northgate High', 'Hilltop School', 'Southvale Academy', 'Ashton Elementary', 'Reef School'],
+  tower: ['Cell site'],
+  factory: ['Portsea Container Terminal', 'Granite Works', 'Moor Wind Farm', 'Dunmore Creamery'],
+  hotel: ['Lagoon Resort', 'Cove Inn', 'Palm Bay Hotel'],
+};
+
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+}
+
+// ---------------------------------------------------------------- geometry helpers
+
+function distToSegment(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
+}
+
+// Polyline in x/z for a link, endpoint to endpoint through its waypoints.
+function linkPath(world, link) {
+  const a = world.byId[link.a], b = world.byId[link.b];
+  return [[a.x, a.z], ...(link.via || []), [b.x, b.z]];
+}
+
+function pathLength(pts) {
+  let s = 0;
+  for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  return s;
+}
+
+// Evenly spaced samples along a polyline.
+function samplePath(pts, step = 1) {
+  const out = [];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = pts[i - 1], [bx, bz] = pts[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
+    for (let k = i === 1 ? 0 : 1; k <= n; k++) out.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- build
+
+function buildWorld() {
+  const nodes = PLACED.map((n) => ({ ...n }));
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const links = LINKS.map((l) => ({ ...l }));
+
+  for (const [site, tier] of ROUTER_SITES) {
+    const s = byId[site];
+    const r = N('rtr_' + site, 'router', `${s.name.replace(/ (Central Office|PoP|hut)$/, '')} ${tier === 'core' ? 'core router' : 'aggregation router'}`,
+      s.x, s.z, ['mpls'], { host: site, tier, role: tier === 'core' ? 'MPLS core (P/PE) router' : 'MPLS aggregation router' });
+    nodes.push(r);
+    byId[r.id] = r;
+  }
+
+  // Access: one street cabinet per site, endpoints fanned out around the town.
+  const rand = rng(7);
+  const used = {};
+  const pick = (type) => {
+    const list = NAMES[type];
+    const i = (used[type] = (used[type] ?? -1) + 1);
+    return type === 'tower' ? `Cell site ${i + 1}` : list[i % list.length];
+  };
+  for (const { site, city, ends } of ACCESS) {
+    const s = byId[site], c = CITY[city];
+    const away = Math.atan2(c.z - s.z, c.x - s.x);
+    const cab = N(`acc_${site}`, 'access', `${c.name} access node`, 0, 0, ['access'], { role: 'Access aggregation for ' + c.name });
+    placeNear(cab, c.x + Math.cos(away) * (c.r * 0.35), c.z + Math.sin(away) * (c.r * 0.35), c);
+    nodes.push(cab); byId[cab.id] = cab;
+    links.push(L('access', cab.id, site));
+    ends.forEach((type, i) => {
+      const ang = away + (i / ends.length) * Math.PI * 2 + rand() * 0.4;
+      const rad = c.r + (type === 'tower' ? 6 : 2.5) + rand() * 3;
+      const e = N(`end_${site}_${i}`, type, pick(type), 0, 0, ['access'], { role: ENDPOINT[type].label, gear: ENDPOINT[type].gear });
+      placeNear(e, c.x + Math.cos(ang) * rad, c.z + Math.sin(ang) * rad, c);
+      nodes.push(e); byId[e.id] = e;
+      links.push(L('access', e.id, cab.id));
+    });
+  }
+
+  // Inline amplifiers along the long backbone and DCI spans.
+  for (const link of links) {
+    if (link.layer !== 'backbone' && link.layer !== 'dci') continue;
+    const pts = [[byId[link.a].x, byId[link.a].z], ...(link.via || []), [byId[link.b].x, byId[link.b].z]];
+    const len = pathLength(pts);
+    const n = Math.floor(len / 26);
+    for (let k = 1; k <= n; k++) {
+      const [x, z] = pointAt(pts, (k / (n + 1)) * len);
+      const ila = N(`ila_${link.a}_${link.b}_${k}`, 'ila', 'In-line amplifier', x, z, [link.layer],
+        { role: `Amplifier hut on ${byId[link.a].name} – ${byId[link.b].name}` });
+      nodes.push(ila); byId[ila.id] = ila;
+    }
+  }
+
+  // Submarine repeaters, every ~9 units along each sea path that is actually underwater.
+  for (const link of links) {
+    if (!link.sea) continue;
+    const pts = [[byId[link.a].x, byId[link.a].z], ...link.via, [byId[link.b].x, byId[link.b].z]];
+    const len = pathLength(pts);
+    let k = 0;
+    for (let d = 9; d < len - 4; d += 9) {
+      const [x, z] = pointAt(pts, d);
+      if (heightAt(x, z) > -3) continue;
+      const rep = N(`rep_${link.a}_${link.b}_${k++}`, 'repeater', 'Undersea repeater', x, z, ['submarine'],
+        { role: `Repeater on the ${link.name}` });
+      nodes.push(rep); byId[rep.id] = rep;
+    }
+  }
+
+  for (const n of nodes) {
+    n.gear = n.gear || gearFor(n);
+    n.links = [];
+  }
+  links.forEach((l, i) => {
+    l.id = 'link' + i;
+    byId[l.a].links.push(l.id);
+    byId[l.b].links.push(l.id);
+  });
+
+  return { nodes, links, byId, cities: CITIES, layers: LAYERS };
+
+  // Walk toward the town centre until the spot is dry land.
+  function placeNear(n, x, z, c) {
+    for (let i = 0; i < 30 && heightAt(x, z) < 0.6; i++) {
+      x += (c.x - x) * 0.15;
+      z += (c.z - z) * 0.15;
+    }
+    n.x = x; n.z = z;
+  }
+}
+
+function pointAt(pts, d) {
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (d <= seg) {
+      const t = d / seg;
+      return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t];
+    }
+    d -= seg;
+  }
+  return pts[pts.length - 1];
+}
+
+function gearFor(n) {
+  switch (n.type) {
+    case 'dc': return 'Ciena Waveserver 5 with WaveLogic 6 Extreme';
+    case 'pop': return 'Ciena 6500 Packet-Optical with RLS ROADMs';
+    case 'regional': return 'Ciena 6500 Packet-Optical';
+    case 'ila': return 'Ciena RLS line amplifier';
+    case 'cls': return 'Ciena GeoMesh Extreme submarine line terminal';
+    case 'repeater': return 'Submarine optical repeater';
+    case 'edge': return 'Off-map cable segment';
+    case 'router': return n.tier === 'core' ? 'Ciena 8100 Coherent Router' : 'Ciena 5100 series router';
+    case 'access': return 'Ciena 5100 series access router';
+    default: return '';
+  }
+}
+
+// Everything three.js: the diorama board, towns, equipment models, cables and traffic.
+
+const INK = new THREE.Color('#1d2a44');
+
+// ---------------------------------------------------------------- materials
+
+const gradient = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([110, 185, 255]), 3, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+
+const matCache = new Map();
+function toon(color, opts = {}) {
+  const key = !Object.keys(opts).length && String(color);
+  if (key && matCache.has(key)) return matCache.get(key);
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: gradient, ...opts });
+  if (key) matCache.set(key, m);
+  return m;
+}
+// Faceted look: toon materials have no flatShading, so split the vertices instead.
+function flat(geo) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  g.computeVertexNormals();
+  return g;
+}
+const inkMat = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
+
+// A black back-face shell slightly bigger than the mesh: the cartoon outline.
+function outline(mesh, t = 0.09) {
+  mesh.geometry.computeBoundingBox();
+  const s = new THREE.Vector3();
+  mesh.geometry.boundingBox.getSize(s);
+  const o = new THREE.Mesh(mesh.geometry, inkMat);
+  o.scale.set((s.x + 2 * t) / Math.max(s.x, 1e-3), (s.y + 2 * t) / Math.max(s.y, 1e-3), (s.z + 2 * t) / Math.max(s.z, 1e-3));
+  o.raycast = () => {};
+  mesh.add(o);
+  return mesh;
+}
+
+function box(w, h, d, color, x = 0, y = 0, z = 0, line = 0.08) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(color));
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = m.receiveShadow = true;
+  return line ? outline(m, line) : m;
+}
+function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 12, line = 0.06) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), toon(color));
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = true;
+  return line ? outline(m, line) : m;
+}
+function ball(r, color, x, y, z, line = 0.06) {
+  const m = new THREE.Mesh(flat(new THREE.IcosahedronGeometry(r, 1)), toon(color));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  return line ? outline(m, line) : m;
+}
+// Gable roof: a triangular prism along x.
+function gable(w, h, d, color, y) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-d / 2, 0); shape.lineTo(d / 2, 0); shape.lineTo(0, h); shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: w, bevelEnabled: false });
+  g.translate(0, 0, -w / 2);
+  g.rotateY(Math.PI / 2);
+  const m = new THREE.Mesh(g, toon(color));
+  m.position.y = y;
+  m.castShadow = true;
+  return outline(m, 0.07);
+}
+
+// ---------------------------------------------------------------- board
+
+function buildBoard(scene) {
+  const W = BOARD.x1 - BOARD.x0, D = BOARD.z1 - BOARD.z0;
+  const geo = new THREE.PlaneGeometry(W, D, W, D);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const c = new THREE.Color();
+  const pal = {
+    deep: new THREE.Color('#1c5fa8'), shelf: new THREE.Color('#5fd0e0'), sand: new THREE.Color('#f3dc9a'),
+    grass: new THREE.Color('#8fd16a'), grass2: new THREE.Color('#6dbb55'), hill: new THREE.Color('#4f9d4a'),
+    rock: new THREE.Color('#a39283'), snow: new THREE.Color('#ffffff'),
+  };
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const edge = x <= BOARD.x0 + 0.01 || x >= BOARD.x1 - 0.01 || z <= BOARD.z0 + 0.01 || z >= BOARD.z1 - 0.01;
+    const h = edge ? SEA_FLOOR : heightAt(x, z);
+    pos.setY(i, h);
+    if (h < 0) c.copy(pal.deep).lerp(pal.shelf, smoothstep(SEA_FLOOR, -1, h));
+    else if (h < 0.9 && landness(x, z) < 0.12) c.copy(pal.sand);
+    else if (h > 13) c.copy(pal.snow);
+    else if (h > 8) c.copy(pal.rock);
+    else if (h > 4.5) c.copy(pal.hill);
+    else c.copy(((Math.sin(x * 0.3) + Math.cos(z * 0.27)) > 0.4) ? pal.grass2 : pal.grass);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const flatGeo = flat(geo);
+  const terrain = new THREE.Mesh(flatGeo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient }));
+  terrain.receiveShadow = true;
+  terrain.name = 'terrain';
+  scene.add(terrain);
+
+  // Diorama base: soil, then a darker stratum.
+  const base = new THREE.Group();
+  const soil = box(W, 3, D, '#b9845a', 0, SEA_FLOOR - 3.4, 0, 0);   // top sits just under the sea floor
+  const rock = box(W, 2.5, D, '#7d5a43', 0, SEA_FLOOR - 5.9, 0, 0);
+  base.add(soil, rock);
+  scene.add(base);
+
+  // Water: a translucent slab so the sea floor and its cables show through.
+  const waterMat = new THREE.MeshToonMaterial({ color: '#36b5e8', gradientMap: gradient, transparent: true, opacity: 0.55, depthWrite: false });
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(W, D, 1, 1), waterMat);
+  top.rotateX(-Math.PI / 2);
+  top.position.y = 0;
+  top.renderOrder = 2;
+  scene.add(top);
+  const sideMat = new THREE.MeshBasicMaterial({ color: '#2a8fc4', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+  const H = -SEA_FLOOR;
+  for (const [w, x, z, ry] of [[W, 0, BOARD.z1, 0], [W, 0, BOARD.z0, 0], [D, BOARD.x1, 0, Math.PI / 2], [D, BOARD.x0, 0, Math.PI / 2]]) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(w, H), sideMat);
+    s.position.set(x, -H / 2, z);
+    s.rotation.y = ry;
+    s.renderOrder = 3;
+    scene.add(s);
+  }
+
+  // Foam: a white ring where land meets water, sampled on a grid.
+  const foam = [];
+  for (let x = BOARD.x0 + 2; x < BOARD.x1 - 2; x += 1.6) {
+    for (let z = BOARD.z0 + 2; z < BOARD.z1 - 2; z += 1.6) {
+      const h = heightAt(x, z);
+      if (h < 0 && h > -0.9 && landness(x, z) > -0.04) foam.push([x, z]);
+    }
+  }
+  const foamMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(0.9, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false }), foam.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  foam.forEach(([x, z], i) => foamMesh.setMatrixAt(i, m4.compose(new THREE.Vector3(x, 0.03, z), q, new THREE.Vector3(1, 1, 1))));
+  foamMesh.renderOrder = 4;
+  scene.add(foamMesh);
+
+  return { terrain, water: top, waterMat, foamMesh };
+}
+
+// ---------------------------------------------------------------- instanced helpers
+
+const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color();
+
+// items: {x, y, z, sx, sy, sz, color, ry}
+function instanced(geo, items, { line = 0.1, shadow = true, faceted = false } = {}) {
+  if (faceted) geo = flat(geo);
+  const g = new THREE.Group();
+  if (!items.length) return g;
+  const body = new THREE.InstancedMesh(geo, toon('#ffffff'), items.length);
+  const ink = line ? new THREE.InstancedMesh(geo, inkMat, items.length) : null;
+  geo.computeBoundingBox();
+  const size = new THREE.Vector3();
+  geo.boundingBox.getSize(size);
+  items.forEach((it, i) => {
+    _p.set(it.x, it.y, it.z);
+    _q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0);
+    _s.set(it.sx, it.sy, it.sz);
+    body.setMatrixAt(i, _m.compose(_p, _q, _s));
+    body.setColorAt(i, _c.set(it.color));
+    if (ink) {
+      _s.set(it.sx + (2 * line) / size.x, it.sy + (2 * line) / size.y, it.sz + (2 * line) / size.z);
+      ink.setMatrixAt(i, _m.compose(_p, _q, _s));
+    }
+  });
+  body.castShadow = shadow;
+  body.receiveShadow = true;
+  g.add(body);
+  if (ink) { ink.raycast = () => {}; g.add(ink); }
+  return g;
+}
+
+const unitBox = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const unitRoof = (() => {
+  const s = new THREE.Shape();
+  s.moveTo(-0.5, 0); s.lineTo(0.5, 0); s.lineTo(0, 0.6); s.closePath();
+  return new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
+})();
+
+function rand(seed) {
+  let s = seed >>> 0;
+  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+}
+
+// Segments of every ground link, to keep buildings and trees off the cables.
+function cableSegments(world) {
+  const segs = [];
+  for (const l of world.links) {
+    if (l.layer === 'mpls' || l.sea) continue;
+    const p = linkPath(world, l);
+    for (let i = 1; i < p.length; i++) segs.push([p[i - 1][0], p[i - 1][1], p[i][0], p[i][1]]);
+  }
+  return segs;
+}
+const clearOf = (segs, nodes, x, z, cable, node) =>
+  segs.every((s) => distToSegment(x, z, ...s) > cable) &&
+  nodes.every((n) => Math.hypot(n.x - x, n.z - z) > node);
+
+// ---------------------------------------------------------------- towns and scenery
+
+const BUILDING_COLORS = ['#f6f1e7', '#ffd6a5', '#bde0fe', '#cdb4db', '#ffc8dd', '#caffbf', '#e9edc9', '#a2d2ff'];
+const ROOF_COLORS = ['#e76f51', '#c0504d', '#6d597a', '#457b9d', '#e9a03b'];
+
+function buildTowns(world) {
+  const segs = cableSegments(world);
+  const ground = world.nodes.filter((n) => !['router', 'repeater', 'edge'].includes(n.type));
+  const r = rand(11);
+  const towers = [], roofs = [], caps = [];
+  for (const c of world.cities) {
+    const step = c.town ? 1.9 : 2.3;
+    for (let x = c.x - c.r; x <= c.x + c.r; x += step) {
+      for (let z = c.z - c.r; z <= c.z + c.r; z += step) {
+        const d = Math.hypot(x - c.x, z - c.z) / c.r;
+        if (d > 1 || r() < 0.12) continue;
+        const jx = x + (r() - 0.5) * 0.4, jz = z + (r() - 0.5) * 0.4;
+        if (heightAt(jx, jz) < 0.6 || !clearOf(segs, ground, jx, jz, 1.5, 2.6)) continue;
+        const y = heightAt(jx, jz) - 0.3;
+        const color = BUILDING_COLORS[Math.floor(r() * BUILDING_COLORS.length)];
+        if (c.town || (d > 0.6 && r() < 0.6)) {
+          const w = 1.1 + r() * 0.5, dd = 0.9 + r() * 0.4, h = 0.9 + r() * 0.5, ry = r() < 0.5 ? 0 : Math.PI / 2;
+          towers.push({ x: jx, y, z: jz, sx: w, sy: h + 0.3, sz: dd, color, ry });
+          roofs.push({ x: jx, y: y + h + 0.3, z: jz, sx: dd + 0.15, sy: 1.1, sz: w + 0.15, color: ROOF_COLORS[Math.floor(r() * ROOF_COLORS.length)], ry: ry + Math.PI / 2 });
+        } else {
+          const w = 1.3 + r() * 0.6, h = 1.5 + (1 - d) * (c.tall ?? 0.4) * 12 * (0.5 + r());
+          towers.push({ x: jx, y, z: jz, sx: w, sy: h, sz: w, color });
+          caps.push({ x: jx, y: y + h, z: jz, sx: w * 0.6, sy: 0.35, sz: w * 0.6, color: '#8d99ae' });
+        }
+      }
+    }
+  }
+  const g = new THREE.Group();
+  g.add(instanced(unitBox, towers, { line: 0.09 }), instanced(unitRoof, roofs, { line: 0.08 }), instanced(unitBox, caps, { line: 0.05 }));
+  return g;
+}
+
+function buildTrees(world) {
+  const segs = cableSegments(world);
+  const ground = world.nodes.filter((n) => !['router', 'repeater', 'edge'].includes(n.type));
+  const r = rand(5);
+  const pines = [], rounds = [], trunks = [];
+  for (let x = BOARD.x0; x < BOARD.x1; x += 1.7) {
+    for (let z = BOARD.z0; z < BOARD.z1; z += 1.7) {
+      const jx = x + (r() - 0.5) * 1.4, jz = z + (r() - 0.5) * 1.4;
+      const h = heightAt(jx, jz);
+      if (h < 1 || h > 12.5) continue;
+      const forest = Math.sin(jx * 0.11 + 1.3) * Math.cos(jz * 0.13) + Math.sin(jx * 0.05 - jz * 0.07);
+      if (forest < 0.55 || r() < 0.35) continue;
+      if (world.cities.some((c) => Math.hypot(c.x - jx, c.z - jz) < c.r + 2.5)) continue;
+      if (!clearOf(segs, ground, jx, jz, 1.6, 3)) continue;
+      const s = 0.7 + r() * 0.6;
+      trunks.push({ x: jx, y: h - 0.2, z: jz, sx: 0.25 * s, sy: 0.8 * s, sz: 0.25 * s, color: '#8a5a3b' });
+      if (h > 5 || r() < 0.3) pines.push({ x: jx, y: h + 0.5 * s, z: jz, sx: s, sy: s * 1.4, sz: s, color: r() < 0.5 ? '#2f8f5b' : '#3a9f60' });
+      else rounds.push({ x: jx, y: h + 1.0 * s, z: jz, sx: s, sy: s, sz: s, color: r() < 0.5 ? '#5cb85c' : '#7bc96f' });
+    }
+  }
+  const g = new THREE.Group();
+  g.add(
+    instanced(unitBox, trunks, { line: 0 }),
+    instanced(new THREE.ConeGeometry(0.9, 2, 7).translate(0, 1, 0), pines, { line: 0.08, faceted: true }),
+    instanced(new THREE.IcosahedronGeometry(0.9, 0), rounds, { line: 0.08, faceted: true }),
+  );
+  return g;
+}
+
+// Little things that move: boats, wind turbines, clouds.
+function buildLife(scene) {
+  const movers = [];
+  const boat = (color) => {
+    const b = new THREE.Group();
+    b.add(box(2.6, 0.6, 1.1, color, 0, -0.2, 0, 0.07), box(1, 0.7, 0.8, '#ffffff', -0.3, 0.4, 0, 0.06));
+    return b;
+  };
+  for (const [cx, cz, r, sp, color] of [[52, -20, 10, 0.12, '#e63946'], [60, 50, 14, -0.08, '#264653'], [-112, -40, 9, 0.1, '#f4a261'], [10, 66, 12, 0.07, '#2a9d8f']]) {
+    const b = boat(color);
+    scene.add(b);
+    movers.push((t) => {
+      const a = t * sp;
+      b.position.set(cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r);
+      b.rotation.y = -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2);
+    });
+  }
+
+  // Cable ship parked over the Portsea – Isla Verde cable.
+  const ship = new THREE.Group();
+  ship.add(box(5, 0.9, 1.8, '#f1faee', 0, -0.3, 0, 0.08), box(1.6, 1.2, 1.4, '#ffc300', 1.2, 0.6, 0, 0.07),
+    cyl(0.12, 0.12, 2.2, '#1d2a44', -1.4, 0.6, 0, 6, 0), box(0.2, 0.2, 1.8, '#1d2a44', -1.9, 2.6, 0, 0));
+  ship.position.set(56, 0, 30);
+  ship.rotation.y = 0.5;
+  scene.add(ship);
+  movers.push((t) => { ship.position.y = Math.sin(t * 1.6) * 0.1; ship.rotation.z = Math.sin(t * 1.3) * 0.03; });
+
+  // Wind farm on the moor.
+  for (const [x, z] of [[-100, -6], [-104, 0], [-97, -12], [-108, -10]]) {
+    const y = heightAt(x, z);
+    const t = new THREE.Group();
+    t.add(cyl(0.15, 0.3, 6, '#ffffff', 0, 0, 0, 8, 0.05));
+    const rotor = new THREE.Group();
+    rotor.position.set(0, 6, 0.35);
+    for (let k = 0; k < 3; k++) {
+      const blade = box(0.25, 3, 0.08, '#ffffff', 0, 0, 0, 0.04);
+      const arm = new THREE.Group();
+      arm.rotation.z = (k * Math.PI * 2) / 3;
+      arm.add(blade);
+      rotor.add(arm);
+    }
+    rotor.add(ball(0.3, '#e63946', 0, 0, 0, 0.04));
+    t.add(rotor);
+    t.position.set(x, y, z);
+    t.rotation.y = 0.4;
+    scene.add(t);
+    movers.push((tt) => { rotor.rotation.z = -tt * 1.4 + x; });
+  }
+
+  // Clouds that drift across and cast soft shadows.
+  const clouds = new THREE.Group();
+  const cr = rand(3);
+  const cloudMat = toon('#ffffff', { transparent: true, opacity: 0.92 });
+  for (let i = 0; i < 7; i++) {
+    const c = new THREE.Group();
+    for (let k = 0; k < 5; k++) {
+      const m = new THREE.Mesh(flat(new THREE.IcosahedronGeometry(2.4 + cr() * 2, 1)), cloudMat);
+      m.position.set((k - 2) * 2.6 + cr(), cr() * 1.2, (cr() - 0.5) * 3);
+      m.castShadow = true;
+      c.add(m);
+    }
+    c.position.set(BOARD.x0 + cr() * (BOARD.x1 - BOARD.x0), 34 + cr() * 8, BOARD.z0 + cr() * (BOARD.z1 - BOARD.z0));
+    c.userData.speed = 1.2 + cr() * 1.5;
+    clouds.add(c);
+  }
+  scene.add(clouds);
+  movers.push((t, dt) => {
+    for (const c of clouds.children) {
+      c.position.x += c.userData.speed * dt;
+      if (c.position.x > BOARD.x1 + 15) c.position.x = BOARD.x0 - 15;
+    }
+  });
+  return { movers, clouds };
+}
+
+// ---------------------------------------------------------------- equipment models
+
+const routerTop = (() => {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#2f80ed'; g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = '#ffffff'; g.fillStyle = '#ffffff'; g.lineWidth = 9; g.lineCap = 'round';
+  const arrow = (a, inward) => {
+    g.save(); g.translate(64, 64); g.rotate(a);
+    const [s, e] = inward ? [46, 14] : [14, 46];
+    g.beginPath(); g.moveTo(s, 0); g.lineTo(e, 0); g.stroke();
+    g.beginPath(); g.moveTo(e + (inward ? -2 : 2), 0); g.lineTo(e + (inward ? 12 : -12), -11); g.lineTo(e + (inward ? 12 : -12), 11); g.closePath(); g.fill();
+    g.restore();
+  };
+  arrow(Math.PI / 4, false); arrow(-3 * Math.PI / 4, false); arrow(3 * Math.PI / 4, true); arrow(-Math.PI / 4, true);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+
+function modelFor(n, layerColor) {
+  const g = new THREE.Group();
+  const s = n.size || 1;
+  switch (n.type) {
+    case 'dc': {
+      g.add(box(7 * s, 2.4, 4.6 * s, '#eef2f7', 0, -0.4));
+      g.add(box(7.1 * s, 0.35, 4.7 * s, layerColor, 0, 1.6, 0, 0.05));
+      for (let i = 0; i < 4; i++) for (let k = 0; k < 2; k++) {
+        g.add(box(1.1, 0.5, 1.1, '#8d99ae', (-2.4 + i * 1.6) * s, 1.95, (-0.9 + k * 1.8) * s, 0.04));
+        g.add(cyl(0.38, 0.38, 0.08, '#2b2d42', (-2.4 + i * 1.6) * s, 2.45, (-0.9 + k * 1.8) * s, 10, 0));
+      }
+      g.add(box(1.6, 1.1, 1.2, '#fca311', 4.3 * s, -0.3, 1.2 * s, 0.05));
+      if (s > 1.2) g.add(box(7 * s, 2.4, 3.4, '#eef2f7', 0, -0.4, 4.6 * s, 0.08), box(7.1 * s, 0.35, 3.5, layerColor, 0, 1.6, 4.6 * s, 0.05));
+      break;
+    }
+    case 'pop': {
+      g.add(box(3.8, 3.2, 3.2, '#c8553d', 0, -0.4));
+      g.add(box(4, 0.35, 3.4, layerColor, 0, 2.8, 0, 0.05));
+      for (let i = -1; i <= 1; i++) g.add(box(0.6, 0.6, 0.05, '#bde0fe', i * 1.1, 1.2, 1.62, 0));
+      g.add(cyl(0.08, 0.08, 2.4, '#adb5bd', 1.3, 3.1, -1, 6, 0));
+      g.add(ball(0.18, '#e63946', 1.3, 5.6, -1, 0));
+      break;
+    }
+    case 'regional': {
+      g.add(box(2.2, 1.6, 1.8, '#fff3e0', 0, -0.3));
+      g.add(gable(2.5, 1, 2.1, layerColor, 1.3));
+      g.add(box(0.5, 0.9, 0.05, '#8d5524', 0.5, -0.1, 0.92, 0));
+      break;
+    }
+    case 'ila': {
+      g.add(box(1.4, 1.1, 1.2, '#dee2e6', 0, -0.2, 0, 0.06));
+      g.add(gable(1.6, 0.6, 1.4, layerColor, 0.9));
+      break;
+    }
+    case 'cls': {
+      g.add(box(3, 2, 2.4, '#ffffff', 0, -0.3));
+      g.add(box(3.2, 0.35, 2.6, layerColor, 0, 1.7, 0, 0.05));
+      g.add(cyl(0.6, 0.6, 0.15, '#495057', 2.6, 0, 0.8, 12, 0.05));
+      break;
+    }
+    case 'repeater': {
+      const r = cyl(0.45, 0.45, 1.8, layerColor, 0, 0, 0, 10, 0.06);
+      r.rotation.z = Math.PI / 2;
+      r.position.y = 0.5;
+      g.add(r);
+      break;
+    }
+    case 'edge': {
+      g.add(cyl(0.7, 0.9, 1.2, layerColor, 0, -0.4, 0, 10));
+      g.add(cyl(0.72, 0.72, 0.3, '#1d2a44', 0, 0.2, 0, 10, 0));
+      g.add(cyl(0.06, 0.06, 2.4, '#1d2a44', 0, 0.8, 0, 6, 0));
+      g.add(box(1.2, 0.7, 0.05, '#e63946', 0.62, 2.4, 0, 0.03));
+      break;
+    }
+    case 'router': {
+      const geo = new THREE.CylinderGeometry(n.tier === 'core' ? 1.4 : 1.05, n.tier === 'core' ? 1.4 : 1.05, 0.8, 24);
+      const side = toon(layerColor);
+      const top = new THREE.MeshToonMaterial({ map: routerTop, gradientMap: gradient });
+      const m = new THREE.Mesh(geo, [side, top, side]);
+      m.castShadow = true;
+      g.add(outline(m, 0.08));
+      break;
+    }
+    case 'access': {
+      g.add(box(1, 1.4, 0.7, '#cfd8dc', 0, -0.2, 0, 0.06));
+      g.add(box(0.75, 0.9, 0.05, layerColor, 0, 0.1, 0.37, 0));
+      break;
+    }
+    case 'bank': {
+      g.add(box(3.2, 0.3, 2.6, '#e9ecef', 0, -0.2));
+      g.add(box(2.8, 1.8, 2, '#fdfdfd', 0, 0, -0.2));
+      for (let i = 0; i < 4; i++) g.add(cyl(0.14, 0.14, 1.8, '#ffffff', -1.1 + i * 0.73, 0.1, 1, 8, 0.04));
+      g.add(box(3, 0.25, 2.5, '#f2c14e', 0, 1.8, 0, 0.05));
+      g.add(gable(2.5, 0.9, 3, '#f2c14e', 2.05));
+      break;
+    }
+    case 'tower': {
+      const parts = 4;
+      for (let i = 0; i < parts; i++) {
+        const r0 = 0.5 - (i * 0.32) / parts, r1 = 0.5 - ((i + 1) * 0.32) / parts;
+        g.add(cyl(r1, r0, 1.8, i % 2 ? '#ffffff' : '#e63946', 0, -0.2 + i * 1.8, 0, 4, 0.05));
+      }
+      for (let k = 0; k < 3; k++) {
+        const a = (k * Math.PI * 2) / 3;
+        const p = box(0.35, 1.1, 0.12, '#f8f9fa', Math.cos(a) * 0.45, 5.6, Math.sin(a) * 0.45, 0.04);
+        p.rotation.y = -a + Math.PI / 2;
+        g.add(p);
+      }
+      const light = ball(0.2, '#ff1744', 0, 7.2, 0, 0);
+      light.material = new THREE.MeshBasicMaterial({ color: '#ff1744' });
+      light.userData.blink = true;
+      g.add(light);
+      break;
+    }
+    case 'office': {
+      g.add(box(2.4, 6.5, 2.4, '#7cc6fe', 0, -0.3));
+      for (let i = 0; i < 6; i++) g.add(box(2.45, 0.12, 2.45, '#ffffff', 0, 0.4 + i * 1, 0, 0));
+      g.add(box(1.4, 0.5, 1.4, '#8d99ae', 0, 6.2, 0, 0.04));
+      break;
+    }
+    case 'hospital': {
+      g.add(box(3.8, 2.2, 3, '#ffffff', 0, -0.3));
+      g.add(box(1.8, 0.1, 0.5, '#e63946', 0, 1.9, 0, 0));
+      g.add(box(0.5, 0.1, 1.8, '#e63946', 0, 1.9, 0, 0));
+      g.add(box(1.2, 1.2, 0.9, '#bde0fe', 1.6, -0.3, 1.6, 0.05));
+      break;
+    }
+    case 'school': {
+      g.add(box(3.6, 1.6, 2, '#ffd166', 0, -0.3));
+      g.add(gable(3.8, 1, 2.3, '#c0504d', 1.3));
+      g.add(cyl(0.05, 0.05, 3, '#6c757d', 2.3, -0.2, 0.8, 6, 0));
+      g.add(box(0.8, 0.5, 0.04, '#2f80ed', 2.72, 2.2, 0.8, 0.02));
+      break;
+    }
+    case 'factory': {
+      g.add(box(4, 2, 3, '#a8dadc', 0, -0.3));
+      for (let i = 0; i < 3; i++) g.add(gable(3, 0.7, 1.3, '#457b9d', 1.7).translateX(-1.3 + i * 1.3).rotateY(Math.PI / 2));
+      g.add(cyl(0.35, 0.45, 4, '#e9ecef', 1.5, -0.3, -1, 10, 0.05));
+      g.add(cyl(0.36, 0.36, 0.5, '#e63946', 1.5, 3.2, -1, 10, 0.03));
+      for (let k = 0; k < 3; k++) {
+        const puff = ball(0.45 + k * 0.15, '#f1f3f5', 1.5, 4.4 + k * 0.9, -1, 0.03);
+        puff.userData.puff = k;
+        g.add(puff);
+      }
+      break;
+    }
+    case 'hotel': {
+      g.add(box(2.8, 3.6, 2, '#ffafcc', 0, -0.3));
+      for (let i = 0; i < 3; i++) g.add(box(2.85, 0.12, 2.05, '#ffffff', 0, 0.7 + i * 0.9, 0, 0));
+      g.add(cyl(0.12, 0.16, 2.4, '#8a5a3b', 2.2, -0.2, 0.8, 6, 0));
+      g.add(ball(0.8, '#52b788', 2.2, 2.4, 0.8, 0.05));
+      break;
+    }
+  }
+  return g;
+}
+
+// Height a node's model stands at.
+function nodeY(world, n) {
+  if (n.type === 'router') return Math.max(0, heightAt(n.x, n.z)) + (n.tier === 'core' ? 12 : 8.5);
+  if (n.type === 'edge') return 0;
+  if (n.type === 'repeater') return heightAt(n.x, n.z);
+  return Math.max(0.4, heightAt(n.x, n.z));
+}
+
+// ---------------------------------------------------------------- cables
+
+const LIFT = { backbone: 0.55, regional: 0.45, dci: 0.45, access: 0.3, submarine: 0.35 };
+const RADIUS = { backbone: 0.42, regional: 0.32, dci: 0.34, access: 0.18, submarine: 0.36, mpls: 0.2 };
+
+function groundY(x, z) {
+  let h = -Infinity;
+  for (const [dx, dz] of [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]]) h = Math.max(h, heightAt(x + dx, z + dz));
+  return h;
+}
+
+const dash = (() => {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 4;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, 64, 4);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 40, 4);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = THREE.RepeatWrapping;
+  return t;
+})();
+
+// A cable's centre line as a three.js curve.
+function linkCurve(world, l, nodeYs) {
+  if (l.layer === 'mpls') {
+    const a = world.byId[l.a], b = world.byId[l.b];
+    const A = new THREE.Vector3(a.x, nodeYs[a.id], a.z), B = new THREE.Vector3(b.x, nodeYs[b.id], b.z);
+    const len = A.distanceTo(B);
+    const mid = A.clone().add(B).multiplyScalar(0.5);
+    mid.y = Math.max(A.y, B.y) + 3 + len * 0.16;
+    return { curve: new THREE.QuadraticBezierCurve3(A, mid, B), len };
+  }
+  const path = linkPath(world, l);
+  const pts = samplePath(path, 1.4).map(([x, z]) => {
+    const h = groundY(x, z);
+    const y = h < 0 ? heightAt(x, z) + LIFT.submarine : h + LIFT[l.layer];
+    return new THREE.Vector3(x, y, z);
+  });
+  // Off-map buoys float: rise from the floor to the surface at the very end.
+  if (world.byId[l.b].type === 'edge') pts[pts.length - 1].y = -0.4;
+  return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len: pathLength(path) };
+}
+
+function buildCable(world, l, color, nodeYs) {
+  const { curve, len } = linkCurve(world, l, nodeYs);
+  const r = RADIUS[l.layer];
+  const segs = Math.max(8, Math.ceil(len * 1.6));
+  const mat = l.layer === 'mpls'
+    ? new THREE.MeshToonMaterial({ color, gradientMap: gradient, alphaMap: dash.clone(), alphaTest: 0.5 })
+    : new THREE.MeshToonMaterial({ color, gradientMap: gradient });
+  if (mat.alphaMap) {
+    mat.alphaMap.repeat.set(Math.max(2, Math.round(len / 2.2)), 1);
+    mat.alphaMap.needsUpdate = true;
+  }
+  const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r, 6, false), mat);
+  mesh.castShadow = l.layer !== 'submarine';
+  const ink = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, r + 0.11, 6, false),
+    l.layer === 'mpls' ? new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide, alphaMap: mat.alphaMap, alphaTest: 0.5 }) : inkMat.clone());
+  ink.raycast = () => {};
+  mesh.add(ink);
+  const table = curve.getSpacedPoints(Math.max(8, Math.ceil(len * 2)));
+  return { mesh, table, len, mat, ink };
+}
+
+// The dashed pole that ties a floating router to the building it lives in.
+function routerPole(x, yTop, yBottom, z, color) {
+  const h = yTop - yBottom;
+  const mat = new THREE.MeshBasicMaterial({ color, alphaMap: dash.clone(), alphaTest: 0.5 });
+  mat.alphaMap.repeat.set(Math.max(2, Math.round(h / 0.9)), 1);
+  mat.alphaMap.needsUpdate = true;
+  const geo = new THREE.CylinderGeometry(0.08, 0.08, h, 6, 1, true);
+  // swap uv so the dash runs up the pole
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) { const u = uv.getX(i); uv.setXY(i, uv.getY(i), u); }
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, yBottom + h / 2, z);
+  m.raycast = () => {};
+  return m;
+}
+
+
+const world = buildWorld();
+const $ = (s) => document.querySelector(s);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------------------------------------------------------- renderer
+
+const canvas = $('#view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 1, 2000);
+// Start framed on the whole board, nudged so the layer panel doesn't cover the west coast.
+const HOME = { pos: new THREE.Vector3(-26, 250, 178), target: new THREE.Vector3(-26, 0, 10) };
+camera.position.copy(HOME.pos);
+
+const controls = new OrbitControls(camera, canvas);
+controls.target.copy(HOME.target);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = false;          // pan across the ground, like a map
+controls.minPolarAngle = 0.08;
+controls.maxPolarAngle = 1.0;                 // never drop below a bird's-eye tilt
+controls.minDistance = 28;
+controls.maxDistance = 330;
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+controls.addEventListener('change', () => {
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x, BOARD.x0, BOARD.x1);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z, BOARD.z0, BOARD.z1);
+  controls.target.y = 0;
+});
+
+scene.add(new THREE.HemisphereLight('#ffffff', '#7d8fa3', 1.6));
+const sun = new THREE.DirectionalLight('#fff4e0', 2.4);
+sun.position.set(-90, 160, 70);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 110, bottom: -110, near: 10, far: 450 });
+sun.shadow.bias = -0.001;
+sun.shadow.normalBias = 0.4;
+scene.add(sun);
+
+// ---------------------------------------------------------------- world
+
+const board = buildBoard(scene);
+scene.add(buildTowns(world), buildTrees(world));
+const life = buildLife(scene);
+
+const layerGroups = Object.fromEntries(LAYERS.map((l) => [l.id, new THREE.Group()]));
+for (const g of Object.values(layerGroups)) scene.add(g);
+
+const nodeYs = {};
+for (const n of world.nodes) nodeYs[n.id] = nodeY(world, n);
+
+// Each node is drawn once, on its first layer, and is shown while any of its layers is.
+const nodeObjs = {};
+const pickables = [];
+const blinkers = [], puffs = [];
+for (const n of world.nodes) {
+  const home = n.layers[0];
+  const g = modelFor(n, LAYER[home].color);
+  g.position.set(n.x, nodeYs[n.id], n.z);
+  g.userData.node = n;
+  g.traverse((o) => {
+    o.userData.nodeId = n.id;
+    if (o.userData.blink) blinkers.push(o);
+    if (o.userData.puff !== undefined) puffs.push(o);
+  });
+  scene.add(g);
+  nodeObjs[n.id] = g;
+  pickables.push(g);
+  if (n.type === 'router') {
+    const host = world.byId[n.host];
+    g.add(routerPole(0, -0.4, nodeYs[host.id] + 3 - nodeYs[n.id], 0, LAYER.mpls.color));
+  }
+}
+
+const linkObjs = {};
+for (const l of world.links) {
+  const c = buildCable(world, l, LAYER[l.layer].color, nodeYs);
+  c.mesh.userData.linkId = l.id;
+  layerGroups[l.layer].add(c.mesh);
+  linkObjs[l.id] = c;
+}
+
+// Traffic: little glowing packets running both ways along every link.
+const SPEED = { dci: 16, backbone: 20, regional: 13, submarine: 14, mpls: 15, access: 8 };
+const packets = {};
+for (const layer of LAYERS) {
+  const runs = [];
+  for (const l of world.links.filter((x) => x.layer === layer.id)) {
+    const n = Math.max(1, Math.round(linkObjs[l.id].len / (layer.id === 'access' ? 9 : 14)));
+    for (let k = 0; k < n; k++) runs.push({ link: linkObjs[l.id], phase: (k + Math.random() * 0.5) / n, dir: k % 2 ? -1 : 1 });
+  }
+  const r = layer.id === 'access' ? 0.32 : 0.48;
+  const col = new THREE.Color(layer.color).lerp(new THREE.Color('#ffffff'), 0.45);
+  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshBasicMaterial({ color: col }), runs.length);
+  mesh.raycast = () => {};
+  layerGroups[layer.id].add(mesh);
+  packets[layer.id] = { mesh, runs };
+}
+const _pm = new THREE.Matrix4(), _v = new THREE.Vector3();
+function movePackets(t) {
+  for (const id in packets) {
+    const { mesh, runs } = packets[id];
+    if (!mesh.parent.visible) continue;
+    runs.forEach((p, i) => {
+      const tab = p.link.table;
+      let u = (p.phase + (t * SPEED[id]) / p.link.len) % 1;
+      if (p.dir < 0) u = 1 - u;
+      const f = u * (tab.length - 1), k = Math.floor(f);
+      _v.copy(tab[k]).lerp(tab[Math.min(k + 1, tab.length - 1)], f - k);
+      mesh.setMatrixAt(i, _pm.makeTranslation(_v.x, _v.y, _v.z));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+// Selection ring.
+const ring = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+ring.rotation.x = -Math.PI / 2;
+ring.visible = false;
+ring.raycast = () => {};
+scene.add(ring);
+
+// ---------------------------------------------------------------- layer state
+
+const shown = Object.fromEntries(LAYERS.map((l) => [l.id, true]));
+let selected = null;
+
+function applyLayers() {
+  for (const l of LAYERS) layerGroups[l.id].visible = shown[l.id];
+  for (const n of world.nodes) nodeObjs[n.id].visible = n.layers.some((id) => shown[id]);
+  // see-through sea when the cables underneath are the point
+  const onlySub = shown.submarine && LAYERS.filter((l) => shown[l.id]).length <= 2;
+  board.waterMat.opacity = onlySub ? 0.3 : 0.55;
+  for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(shown[btn.dataset.layer]));
+  if (selected && !nodeObjs[selected].visible) select(null);
+}
+
+function emphasise() {
+  const keep = selected ? new Set(world.byId[selected].links) : null;
+  for (const l of world.links) {
+    const o = linkObjs[l.id];
+    const dim = keep && !keep.has(l.id);
+    o.mat.transparent = dim;
+    o.mat.opacity = dim ? 0.18 : 1;
+    o.mat.depthWrite = !dim;
+    o.ink.visible = !dim;
+    o.mat.needsUpdate = true;
+  }
+}
+
+// ---------------------------------------------------------------- camera moves
+
+let flight = null;
+function flyTo(target, distance, polar = 0.62, azimuth = null, ms = 1300) {
+  const from = { pos: camera.position.clone(), target: controls.target.clone() };
+  const off = camera.position.clone().sub(controls.target);
+  const sph = new THREE.Spherical().setFromVector3(off);
+  sph.radius = distance;
+  sph.phi = polar;
+  if (azimuth !== null) sph.theta = azimuth;
+  const to = { target: target.clone().setY(0) };
+  to.pos = to.target.clone().add(new THREE.Vector3().setFromSpherical(sph));
+  flight = { from, to, t0: performance.now(), ms: reduceMotion ? 1 : ms };
+}
+function stepFlight(now) {
+  if (!flight) return;
+  const k = Math.min(1, (now - flight.t0) / flight.ms);
+  const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  camera.position.lerpVectors(flight.from.pos, flight.to.pos, e);
+  controls.target.lerpVectors(flight.from.target, flight.to.target, e);
+  if (k >= 1) flight = null;
+}
+
+function frameNodes(ids, polar = 0.6) {
+  const box = new THREE.Box3();
+  for (const id of ids) { const n = world.byId[id]; box.expandByPoint(new THREE.Vector3(n.x, 0, n.z)); }
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  const fit = Math.max(s.x / camera.aspect, s.z * 1.35, 30);
+  flyTo(c, THREE.MathUtils.clamp(fit * 1.25, 45, 320), polar, 0);
+}
+
+function focusLayer(id) {
+  for (const l of LAYERS) shown[l.id] = l.id === id;
+  applyLayers();
+  const ids = world.nodes.filter((n) => n.layers.includes(id)).map((n) => n.id);
+  frameNodes(ids, id === 'mpls' ? 0.85 : 0.6);
+  showCaption(LAYER[id]);
+}
+function showAll() {
+  for (const l of LAYERS) shown[l.id] = true;
+  applyLayers();
+  flyTo(HOME.target, HOME.pos.distanceTo(HOME.target), new THREE.Spherical().setFromVector3(HOME.pos.clone().sub(HOME.target)).phi, 0);
+  showCaption(null);
+}
+
+// ---------------------------------------------------------------- HUD
+
+const TYPE_LABEL = {
+  dc: 'Data center', pop: 'Backbone point of presence', regional: 'Regional ring hut', ila: 'In-line amplifier hut',
+  cls: 'Cable landing station', repeater: 'Undersea repeater', edge: 'Cable leaves the map', router: 'MPLS router',
+  access: 'Access node', ...Object.fromEntries(Object.entries(ENDPOINT).map(([k, v]) => [k, v.label])),
+};
+
+function layerStats(id) {
+  const ns = world.nodes.filter((n) => n.layers.includes(id));
+  const ls = world.links.filter((l) => l.layer === id);
+  const c = (t) => ns.filter((n) => n.type === t).length;
+  switch (id) {
+    case 'dci': return `${c('dc')} campuses · ${ls.length} spans`;
+    case 'regional': return `3 rings · ${c('regional')} huts`;
+    case 'backbone': return `${c('pop')} PoPs · ${c('ila')} amp huts`;
+    case 'submarine': return `${ls.length} cables · ${c('repeater')} repeaters`;
+    case 'mpls': return `${c('router')} routers · ${ls.length} paths`;
+    case 'access': return `${ns.length - c('access')} customer sites`;
+  }
+  return '';
+}
+
+const list = $('#layers');
+for (const l of LAYERS) {
+  const row = document.createElement('li');
+  row.className = 'layer';
+  row.style.setProperty('--c', l.color);
+  row.innerHTML = `
+    <button class="toggle" data-layer="${l.id}" aria-pressed="true" title="Show or hide ${l.name}">
+      <span class="wire" aria-hidden="true"></span>
+      <span class="txt"><span class="nm">${l.name}</span><span class="st">${layerStats(l.id)}</span></span>
+    </button>
+    <button class="focus" data-focus="${l.id}" title="Fly to ${l.name}" aria-label="Fly to ${l.name}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+    </button>`;
+  list.append(row);
+}
+list.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-layer]');
+  if (t) { shown[t.dataset.layer] = !shown[t.dataset.layer]; applyLayers(); stopTour(); return; }
+  const f = e.target.closest('[data-focus]');
+  if (f) { stopTour(); focusLayer(f.dataset.focus); }
+});
+$('#btn-all').addEventListener('click', () => { stopTour(); showAll(); });
+$('#btn-tour').addEventListener('click', () => (tour ? stopTour() : startTour()));
+
+const opts = { labels: true, traffic: true, clouds: true };
+for (const b of document.querySelectorAll('[data-opt]')) {
+  b.addEventListener('click', () => {
+    opts[b.dataset.opt] = !opts[b.dataset.opt];
+    b.setAttribute('aria-pressed', String(opts[b.dataset.opt]));
+    life.clouds.visible = opts.clouds;
+    for (const id in packets) packets[id].mesh.visible = opts.traffic;
+  });
+}
+
+const caption = $('#caption');
+function showCaption(layer, step) {
+  caption.hidden = !layer;
+  if (!layer) return;
+  caption.style.setProperty('--c', layer.color);
+  caption.querySelector('.cap-k').textContent = step || 'Layer';
+  caption.querySelector('.cap-t').textContent = layer.name;
+  caption.querySelector('.cap-b').textContent = layer.blurb;
+  caption.querySelector('.cap-g').textContent = layer.gear;
+}
+$('#cap-close').addEventListener('click', () => { stopTour(); showAll(); });
+
+// Info card for the clicked thing.
+const card = $('#card');
+function select(id) {
+  selected = id;
+  ring.visible = !!id;
+  emphasise();
+  if (!id) { card.hidden = true; return; }
+  const n = world.byId[id];
+  const layer = LAYER[n.layers[0]];
+  ring.position.set(n.x, nodeYs[id] + (n.type === 'router' ? -0.6 : 0.25), n.z);
+  ring.scale.setScalar(n.type === 'dc' ? 2 : n.type === 'router' ? 0.7 : n.type === 'ila' || n.type === 'repeater' ? 0.5 : 1);
+  ring.material.color.set(layer.color);
+  card.style.setProperty('--c', layer.color);
+  const neighbours = [...new Set(n.links.map((lid) => {
+    const l = world.links.find((x) => x.id === lid);
+    return l.a === id ? l.b : l.a;
+  }))].map((nid) => world.byId[nid]);
+  card.querySelector('.card-k').textContent = TYPE_LABEL[n.type] || n.type;
+  card.querySelector('.card-t').textContent = n.name;
+  card.querySelector('.card-role').textContent = n.role || '';
+  card.querySelector('.card-gear').textContent = n.gear || '';
+  card.querySelector('.card-layers').innerHTML = n.layers.map((lid) =>
+    `<span class="chip" style="--c:${LAYER[lid].color}">${LAYER[lid].short}</span>`).join('');
+  const nb = card.querySelector('.card-links');
+  nb.innerHTML = neighbours.length
+    ? neighbours.map((m) => `<li><button data-goto="${m.id}">${m.name}</button></li>`).join('')
+    : '<li class="none">Nothing else on the map</li>';
+  card.querySelector('.card-links-h').hidden = !neighbours.length;
+  card.hidden = false;
+}
+card.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-goto]');
+  if (g) {
+    const n = world.byId[g.dataset.goto];
+    const lay = n.layers.find((x) => !shown[x]);
+    if (lay && !n.layers.some((x) => shown[x])) { shown[lay] = true; applyLayers(); }
+    select(n.id);
+    flyTo(new THREE.Vector3(n.x, 0, n.z), Math.min(camera.position.distanceTo(controls.target), 110), 0.6);
+  }
+});
+$('#card-close').addEventListener('click', () => select(null));
+
+// ---------------------------------------------------------------- labels
+
+const labelLayer = $('#labels');
+const labels = [];
+for (const c of world.cities) {
+  const el = document.createElement('div');
+  el.className = 'lbl city' + (c.town ? ' town' : '') + (c.big ? ' big' : '');
+  el.textContent = c.name;
+  labelLayer.append(el);
+  labels.push({ el, pos: new THREE.Vector3(c.x, Math.max(0, heightAt(c.x, c.z)) + (c.town ? 4 : 9), c.z), town: c.town });
+}
+for (const n of world.nodes.filter((x) => x.type === 'edge' || x.type === 'dc')) {
+  const el = document.createElement('div');
+  el.className = 'lbl tag';
+  el.style.setProperty('--c', LAYER[n.layers[0]].color);
+  el.textContent = n.type === 'edge' ? n.name + ' →' : n.name;
+  labelLayer.append(el);
+  labels.push({ el, pos: new THREE.Vector3(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z), node: n.id, tag: true });
+}
+const tip = document.createElement('div');
+tip.className = 'lbl tip';
+tip.hidden = true;
+labelLayer.append(tip);
+
+const _lp = new THREE.Vector3();
+function placeLabels() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const dist = camera.position.distanceTo(controls.target);
+  for (const L of labels) {
+    let vis = opts.labels;
+    if (L.town) vis &&= dist < 200;
+    if (L.tag) vis &&= dist < 230 && nodeObjs[L.node].visible;
+    if (vis) {
+      _lp.copy(L.pos).project(camera);
+      vis = _lp.z < 1 && Math.abs(_lp.x) < 1.1 && Math.abs(_lp.y) < 1.1;
+      if (vis) L.el.style.transform = `translate(${((_lp.x + 1) / 2) * w}px, ${((1 - _lp.y) / 2) * h}px) translate(-50%, -100%)`;
+    }
+    L.el.hidden = !vis;
+  }
+}
+
+// ---------------------------------------------------------------- picking
+
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function pick(ev) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  for (const hit of ray.intersectObjects(pickables, true)) {
+    let o = hit.object, ok = true;
+    for (; o; o = o.parent) if (!o.visible) { ok = false; break; }
+    if (ok && hit.object.userData.nodeId) return hit.object.userData.nodeId;
+  }
+  return null;
+}
+let hoverId = null, lastMove = null;
+canvas.addEventListener('pointermove', (ev) => { lastMove = ev; });
+canvas.addEventListener('pointerleave', () => { lastMove = null; hoverId = null; tip.hidden = true; canvas.style.cursor = ''; });
+let down = null;
+canvas.addEventListener('pointerdown', (ev) => { down = [ev.clientX, ev.clientY]; });
+canvas.addEventListener('pointerup', (ev) => {
+  if (!down || Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 5) return;
+  const id = pick(ev);
+  select(id);
+  if (id) {
+    const n = world.byId[id];
+    const d = camera.position.distanceTo(controls.target);
+    if (d > 140) flyTo(new THREE.Vector3(n.x, 0, n.z), 110, 0.6);
+  }
+});
+function hover() {
+  if (!lastMove || flight) return;
+  const id = pick(lastMove);
+  hoverId = id;
+  canvas.style.cursor = id ? 'pointer' : '';
+  tip.hidden = !id;
+  if (id) {
+    const n = world.byId[id];
+    tip.style.setProperty('--c', LAYER[n.layers[0]].color);
+    tip.innerHTML = `<b>${n.name}</b><span>${TYPE_LABEL[n.type]}</span>`;
+    const r = canvas.getBoundingClientRect();
+    tip.style.transform = `translate(${lastMove.clientX - r.left + 14}px, ${lastMove.clientY - r.top + 14}px)`;
+  }
+  lastMove = null;
+}
+
+// ---------------------------------------------------------------- tour
+
+let tour = null;
+function startTour() {
+  tour = { i: 0, timer: null };
+  $('#btn-tour').textContent = 'Stop tour';
+  $('#btn-tour').setAttribute('aria-pressed', 'true');
+  select(null);
+  nextStop();
+}
+function nextStop() {
+  if (!tour) return;
+  if (tour.i >= LAYERS.length) { stopTour(); showAll(); return; }
+  const l = LAYERS[tour.i];
+  focusLayer(l.id);
+  showCaption(l, `Stop ${tour.i + 1} of ${LAYERS.length}`);
+  tour.i++;
+  tour.timer = setTimeout(nextStop, 7000);
+}
+function stopTour() {
+  if (!tour) return;
+  clearTimeout(tour.timer);
+  tour = null;
+  $('#btn-tour').textContent = 'Take the tour';
+  $('#btn-tour').setAttribute('aria-pressed', 'false');
+}
+$('#cap-next').addEventListener('click', () => {
+  if (!tour) { const i = LAYERS.findIndex((l) => l.name === caption.querySelector('.cap-t').textContent); focusLayer(LAYERS[(i + 1) % LAYERS.length].id); return; }
+  clearTimeout(tour.timer);
+  nextStop();
+});
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { stopTour(); select(null); }
+});
+
+// ---------------------------------------------------------------- loop
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+}
+
+const clock = new THREE.Clock();
+let t = 0;
+function frame(now) {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  if (!reduceMotion) t += dt;
+  resize();
+  stepFlight(now);
+  controls.update();
+  for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
+  movePackets(t);
+  for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
+  for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;
+  for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
+  ring.rotation.z = t;
+  ring.position.y += Math.sin(t * 3) * 0.004;
+  hover();
+  placeLabels();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+applyLayers();
+requestAnimationFrame(frame);
+window.netlandia = { world, select, focusLayer, showAll, camera, controls };
+
+</script>
