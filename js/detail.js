@@ -91,8 +91,10 @@ export function buildDetail(world, part) {
     scene.add(mesh);
     packets.push({ layer, mesh, runs });
   }
+  let fxRef = null;
   const m4 = new THREE.Matrix4(), v = new THREE.Vector3();
-  function update(t, traffic) {
+  function update(t, traffic, dt = 0) {
+    fxRef.update(dt, t);
     for (const { layer, mesh, runs } of packets) {
       mesh.visible = traffic;
       if (!traffic) continue;
@@ -118,5 +120,175 @@ export function buildDetail(world, part) {
   ring.visible = false;
   scene.add(ring);
 
-  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir };
+  const fx = buildFx({ scene, nodes, links, nodeObjs, linkObjs, space });
+  fxRef = fx;
+  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir, fx };
 }
+
+// ---------------------------------------------------------------- effects
+//
+// What a technology explainer can do to the network on screen: light links up or
+// dim them, cut or block one, put a glow under a site, run a labelled packet along
+// a path, pin an HTML tag or a queue readout to a point. `clear()` puts it all back.
+
+
+function buildFx({ scene, nodes, links, nodeObjs, linkObjs, space }) {
+  const k = space.k;
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const base = {};
+  for (const id in linkObjs) base[id] = linkObjs[id].mat.color.clone();
+  const packets = [], spots = [], anchors = [], temps = [];
+  const Y = new THREE.Vector3(0, 1, 0);
+  const upAt = (o) => Y.clone().applyQuaternion(o.quaternion);
+
+  // the link joining two sites in this view, if any
+  const link = (a, b) => links.find((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a))?.id ?? null;
+  // every link in this view, or just those of one layer
+  const linksOf = (layer) => links.filter((l) => !layer || l.layer === layer).map((l) => l.id);
+
+  // shortest path by hops from one site to another, optionally keeping off some links
+  function path(from, to, avoid = []) {
+    const skip = new Set(avoid);
+    const prev = { [from]: null }, queue = [from];
+    while (queue.length) {
+      const cur = queue.shift();
+      if (cur === to) break;
+      for (const l of links) {
+        if (skip.has(l.id)) continue;
+        const next = l.a === cur ? l.b : l.b === cur ? l.a : null;
+        if (next && !(next in prev)) { prev[next] = cur; queue.push(next); }
+      }
+    }
+    if (!(to in prev)) return null;
+    const out = [];
+    for (let n = to; n; n = prev[n]) out.unshift(n);
+    return out;
+  }
+
+  const nodePos = (id, lift = 0) => nodeObjs[id].position.clone().addScaledVector(upAt(nodeObjs[id]), lift * k);
+
+  function linkState(id, state) {
+    const o = linkObjs[id];
+    if (!o) return;
+    o.mat.transparent = state === 'dim';
+    o.mat.opacity = state === 'dim' ? 0.14 : 1;
+    o.mat.depthWrite = state !== 'dim';
+    o.ink.visible = state !== 'dim';
+    o.mesh.visible = state !== 'off';
+    o.mat.color.copy(base[id]);
+    if (state === 'glow') o.mat.color.lerp(new THREE.Color('#ffffff'), 0.3);
+    if (state === 'cut') o.mat.color.set('#b0b7c3');
+    o.mat.needsUpdate = true;
+  }
+
+  // light a set of links (and nothing else)
+  function focus(linkIds) {
+    const keep = new Set(linkIds);
+    for (const id in linkObjs) linkState(id, keep.has(id) ? 'glow' : 'dim');
+  }
+  const pathLinks = (ids) => ids.slice(1).map((b, i) => link(ids[i], b));
+
+  function spot(id, color = '#ffffff') {
+    const o = nodeObjs[id];
+    const m = new THREE.Mesh(new THREE.TorusGeometry(2.6 * k, 0.22 * k, 8, 36), new THREE.MeshBasicMaterial({ color }));
+    m.rotation.x = -Math.PI / 2;
+    m.raycast = () => {};
+    const g = new THREE.Group();
+    g.position.copy(o.position);
+    g.quaternion.copy(o.quaternion);
+    g.add(m);
+    scene.add(g);
+    spots.push({ g, m, phase: Math.random() * 6 });
+    o.scale.setScalar(k * 1.1);
+    return g;
+  }
+
+  // an HTML element that follows a 3D point (a fixed vector or a function returning one)
+  function anchor(html, at, cls = '') {
+    const el = document.createElement('div');
+    el.className = 'fxtag ' + cls;
+    el.innerHTML = html;
+    document.querySelector('#detail-labels').append(el);
+    const a = { el, at: typeof at === 'function' ? at : () => at };
+    anchors.push(a);
+    return a;
+  }
+
+  // a cut or a block marker on the middle of a link
+  function marker(linkId, kind) {
+    const o = linkObjs[linkId];
+    const mid = o.table[Math.floor(o.table.length / 2)].clone();
+    if (kind === 'cut') linkState(linkId, 'cut');
+    return anchor(kind === 'cut' ? '<b>✕</b> fibre cut' : '<b>▮</b> RPL blocked', mid, 'mark ' + kind);
+  }
+
+  // a packet running along a path of sites; `tag` is HTML that rides with it
+  function packet(ids, { color = '#ffffff', speed = 14, loop = true, tag = null, size = 0.55, onHop = null, delay = 0 } = {}) {
+    const pts = [], hops = [0];
+    for (let i = 1; i < ids.length; i++) {
+      const lid = link(ids[i - 1], ids[i]);
+      if (!lid) continue;
+      const l = links.find((x) => x.id === lid);
+      let tab = linkObjs[lid].table;
+      if (l.a !== ids[i - 1]) tab = [...tab].reverse();
+      for (const p of tab) if (!pts.length || pts[pts.length - 1].distanceTo(p) > 1e-4) pts.push(p.clone());
+      hops.push(pts.length - 1);
+    }
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(size * k, 12, 10), new THREE.MeshBasicMaterial({ color }));
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(size * k * 1.5, 12, 10), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3 }));
+    mesh.add(halo);
+    mesh.raycast = () => {};
+    mesh.visible = false;
+    scene.add(mesh);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    const total = cum[cum.length - 1] || 1;
+    const pk = { mesh, pts, cum, total, hops, speed: speed * k, loop, s: -delay * speed * k, hop: 0, onHop, tagEl: null, done: false };
+    if (tag) pk.tag = anchor(tag, () => mesh.position.clone().addScaledVector(Y, 1.6 * k), 'ride');
+    packets.push(pk);
+    return pk;
+  }
+
+  // a queue readout pinned above a site: lanes of bars, each a class of traffic
+  function queue(id, lanes) {
+    const html = `<div class="q">${lanes.map((l) => `<div class="lane"><i style="--c:${l.color};height:${Math.round(l.fill * 100)}%"></i><span>${l.name}</span></div>`).join('')}</div>`;
+    const a = anchor(html, nodePos(id, 7), 'queue');
+    return { set: (i, fill) => { a.el.querySelectorAll('i')[i].style.height = Math.round(fill * 100) + '%'; } };
+  }
+
+  function clear() {
+    for (const id in linkObjs) linkState(id, 'normal');
+    for (const pk of packets) { scene.remove(pk.mesh); }
+    for (const s of spots) scene.remove(s.g);
+    for (const a of anchors) a.el.remove();
+    for (const o of temps) scene.remove(o);
+    for (const n of nodes) nodeObjs[n.id].scale.setScalar(k);
+    packets.length = spots.length = anchors.length = temps.length = 0;
+  }
+
+  function update(dt, t) {
+    for (const s of spots) {
+      const p = 1 + 0.12 * Math.sin(t * 4 + s.phase);
+      s.m.scale.set(p, p, 1);
+    }
+    for (const pk of packets) {
+      if (pk.done) continue;
+      pk.s += pk.speed * dt;
+      if (pk.s < 0) continue;
+      if (pk.s >= pk.total) {
+        if (pk.loop) { pk.s -= pk.total; pk.hop = 0; if (pk.onHop) pk.onHop(0, pk); }
+        else { pk.s = pk.total; pk.done = true; if (pk.onHop) pk.onHop(pk.hops.length - 1, pk); }
+      }
+      pk.mesh.visible = true;
+      let i = 1;
+      while (i < pk.cum.length - 1 && pk.cum[i] < pk.s) i++;
+      const f = (pk.s - pk.cum[i - 1]) / ((pk.cum[i] - pk.cum[i - 1]) || 1);
+      pk.mesh.position.lerpVectors(pk.pts[i - 1], pk.pts[i], Math.min(1, f));
+      const hop = pk.hops.findIndex((h, j) => j === pk.hops.length - 1 || pk.hops[j + 1] > i - 1);
+      if (hop !== pk.hop) { pk.hop = hop; if (pk.onHop) pk.onHop(hop, pk); }
+    }
+  }
+
+  return { byId, link, linksOf, path, pathLinks, nodePos, linkState, focus, spot, anchor, marker, packet, queue, clear, update, anchors };
+}
+

@@ -62,6 +62,32 @@ can later take over that address.
 
 ![the submarine network round the planet](docs/submarine.png)
 
+## Explore the technology
+
+Each network's panel lists the technologies that matter in that space. Pick one and
+a short explainer plays out live on the network, step by step (Next / Back, or the
+arrow keys): links light up or go dark, a fibre gets cut, a labelled packet runs
+its route, a queue readout fills, a fault alarm appears where it would.
+
+| network | topics |
+|---|---|
+| Long-haul RLS mesh | the line system and its amplifiers · **CDC ROADMs** (colorless, directionless, contentionless, at the five-degree Junction site) · mesh restoration round a fibre cut |
+| Capitalia metro optical | fixed two-degree **ROADM ring** · ring protection · data center interconnect |
+| Submarine | line terminals, repeaters and spectrum sharing |
+| IP/MPLS core | **segment routing (SR-MPLS)**, a label stack that pops hop by hop · TI-LFA fast reroute |
+| Metro aggregation | **G.8032** ring protection (RPL, R-APS, flush) · low-cost Ethernet aggregation (E-Line, no MPLS at the edge) · **QoS** queues on the uplink · **CFM** heartbeats and loss of continuity |
+| 5G mobile xhaul | QoS for fronthaul · CFM to the cell site · G.8032 on the xhaul ring |
+
+| SR-MPLS: the stack pops at each hop | G.8032: R-APS after a span fails |
+|---|---|
+| ![](docs/tech-sr.png) | ![](docs/tech-g8032.png) |
+
+A topic has its own address too, such as `#ipcore.sr` or `#aggregation.g8032`.
+Topics live in `js/tech.js` as data: a step is a sentence plus a function that
+describes the scene using a small set of effects (`focus`, `marker`, `packet`,
+`spot`, `queue`, `anchor`); the tests run every step against the network's data to
+make sure it only touches sites and links that exist there.
+
 ## Controls
 
 - Globe: drag (one finger on a phone) spins the planet in any direction; scroll or
@@ -89,9 +115,11 @@ inlined, so it can be shared as one file.
 |---|---|
 | `js/world.js` | pure data: the two sides and their projections onto the planet, terrain, towns, every node and link, generated customers, amplifiers and repeaters, the six major networks, the region each covers on the globe and the links each owns |
 | `js/scene.js` | three.js: the planet, sea and atmosphere, towns and trees (instanced), equipment models, solid and dashed cables, boats, wind farm, clouds |
-| `js/detail.js` | a network on its own: laid flat, or round an invisible planet, with its own lights and traffic |
+| `js/detail.js` | a network on its own: laid flat, or round an invisible planet, with its own lights and traffic, and the effects the explainers use |
+| `js/tech.js` | the technology topics for each network and the step player |
 | `js/main.js` | globe camera and side switch, the networks as clickable regions with their halos, the airliner, switching views, labels, picking, the site card |
 | `css/net.css` | the HUD |
+| `test/tech.test.mjs` | every topic's steps touch only that network's sites and links; the brief's technologies are where it asked |
 | `test/world.test.mjs` | data checks: links resolve, transport on side A and data on side B, gear and fibre on land, subsea cables at sea, no two cables run alongside each other, every ROADM and core router has 3+ routes, no customer or cell site on a spur, the six networks own their own links, each network's sites stand inside its region |
 | `build.mjs` | bundles everything into `dist/netlandia.html`, and fails if two modules declare the same top-level name |
 | `vendor/` | three.js r160 and OrbitControls (MIT) |

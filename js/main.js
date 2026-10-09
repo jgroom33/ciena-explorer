@@ -5,6 +5,7 @@ import {
   buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, place, sph, frameAt,
 } from './scene.js';
 import { buildDetail } from './detail.js';
+import { TOPICS, TechPlayer } from './tech.js';
 
 const world = buildWorld();
 const parts = majorParts(world);
@@ -300,10 +301,13 @@ const detailLabels = $('#detail-labels');
 const hint = $('.hint');
 const GLOBE_HINT = hint.textContent;
 
-function openMajor(id) {
-  if (location.hash.slice(1) !== id) { location.hash = id; return; }   // hashchange comes back here
+function openMajor(id, topicId = null) {
+  const want = topicId ? `${id}.${topicId}` : id;
+  if (location.hash.slice(1) !== want) { location.hash = want; return; }   // hashchange comes back here
   const m = MAJOR[id];
+  const already = mode === 'detail' && detail === details[id];
   detail = details[id] ??= buildDetail(world, parts[id]);
+  if (already) { showTopic(topicId); return; }
   mode = 'detail';
   emphasise(null);
   controls.enabled = false;
@@ -342,15 +346,68 @@ function openMajor(id) {
     const o = detail.nodeObjs[n.id];
     return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
   });
+  $('#d-topics').replaceChildren(...TOPICS[id].map((t) => {
+    const b = document.createElement('button');
+    b.className = 'topic';
+    b.dataset.topic = t.id;
+    b.innerHTML = `<b>${t.name}</b><span>${t.summary}</span>`;
+    return b;
+  }));
   panel.hidden = true;
   detailPanel.hidden = false;
   labelLayer.hidden = true;
   detailLabels.hidden = false;
   tip.hidden = true;
   selectInDetail(null);
+  showTopic(topicId);
+}
+
+// ---------------------------------------------------------------- technology explainers
+
+const techCard = $('#tech');
+let player = null;
+function showTopic(topicId) {
+  const majorId = Object.keys(details).find((k) => details[k] === detail);
+  const topic = topicId && TOPICS[majorId].find((t) => t.id === topicId);
+  if (player) { player.close(); player = null; }
+  for (const b of document.querySelectorAll('[data-topic]')) b.setAttribute('aria-pressed', String(b.dataset.topic === topicId));
+  if (!topic) { techCard.hidden = true; return; }
+  selectInDetail(null);
+  player = new TechPlayer(detail.fx);
+  techCard.style.setProperty('--c', MAJOR[majorId].color);
+  $('#t-tag').textContent = topic.tag;
+  $('#t-title').textContent = topic.name;
+  renderStep(player.open(topic));
+  techCard.hidden = false;
+}
+function renderStep(step) {
+  const n = player.topic.steps.length;
+  $('#t-say').textContent = step.say;
+  $('#t-dots').innerHTML = player.topic.steps.map((_, i) => `<i class="${i === player.i ? 'on' : ''}"></i>`).join('');
+  $('#t-back').disabled = player.i === 0;
+  $('#t-next').textContent = player.i === n - 1 ? 'Done' : 'Next';
+}
+$('#d-topics').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-topic]');
+  if (!b) return;
+  const majorId = Object.keys(details).find((k) => details[k] === detail);
+  openMajor(majorId, b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.topic);
+});
+$('#t-next').addEventListener('click', () => {
+  if (!player) return;
+  if (player.i === player.topic.steps.length - 1) { closeTopic(); return; }
+  renderStep(player.next());
+});
+$('#t-back').addEventListener('click', () => { if (player && player.i > 0) renderStep(player.back()); });
+$('#t-close').addEventListener('click', closeTopic);
+function closeTopic() {
+  const majorId = Object.keys(details).find((k) => details[k] === detail);
+  if (majorId) openMajor(majorId, null);
 }
 
 function closeMajor() {
+  if (player) { player.close(); player = null; }
+  techCard.hidden = true;
   mode = 'globe';
   detailControls.enabled = false;
   controls.enabled = true;
@@ -361,10 +418,12 @@ function closeMajor() {
   card.hidden = true;
   hint.textContent = GLOBE_HINT;
 }
-$('#btn-back').addEventListener('click', () => { if (location.hash) history.back(); else closeMajor(); });
+// Back goes to the globe in one hop, however many topics were visited on the way.
+$('#btn-back').addEventListener('click', () => { history.pushState(null, '', location.pathname + location.search); route(); });
 function route() {
-  const id = location.hash.slice(1);
-  if (MAJOR[id]) openMajor(id); else if (mode === 'detail') closeMajor();
+  const [id, topicId] = location.hash.slice(1).split('.');
+  if (MAJOR[id]) openMajor(id, TOPICS[id].some((t) => t.id === topicId) ? topicId : null);
+  else if (mode === 'detail') closeMajor();
 }
 addEventListener('hashchange', route);
 
@@ -524,8 +583,11 @@ function hover() {
 }
 
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || mode !== 'detail') return;
-  if (selected) selectInDetail(null); else $('#btn-back').click();
+  if (mode !== 'detail') return;
+  if (e.key === 'ArrowRight' && player) $('#t-next').click();
+  if (e.key === 'ArrowLeft' && player) $('#t-back').click();
+  if (e.key !== 'Escape') return;
+  if (selected) selectInDetail(null); else if (player) closeTopic(); else $('#btn-back').click();
 });
 
 // ---------------------------------------------------------------- loop
@@ -562,14 +624,19 @@ function frame(now) {
     renderer.render(scene, camera);
   } else {
     detailControls.update();
-    detail.update(t, opts.traffic);
+    detail.update(t, opts.traffic && !player, dt);
     detail.ringMesh.rotation.z = t;
     hover();
     const r = canvas.getBoundingClientRect();
     for (const L of detail.labels) {
       const [x, y, z] = toScreen(L.pos, detailCam, r);
-      L.el.hidden = !opts.labels || z > 1;
+      L.el.hidden = !opts.labels || z > 1 || !!player;
       L.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    }
+    for (const a of detail.fx.anchors) {
+      const [x, y, z] = toScreen(a.at(), detailCam, r);
+      a.el.hidden = z > 1;
+      a.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     }
     renderer.render(detail.scene, detailCam);
   }
@@ -577,5 +644,5 @@ function frame(now) {
 }
 route();
 requestAnimationFrame(frame);
-window.netlandia = { world, openMajor, closeMajor, selectInDetail, emphasise, flyTo, camera, controls, nodeObjs };
+window.netlandia = { world, openMajor, closeMajor, selectInDetail, emphasise, flyTo, camera, controls, nodeObjs, get player() { return player; } };
 window.netlandiaFlat = (x, z, side = 0) => flatToDir(x, z, side);

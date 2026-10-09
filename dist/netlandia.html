@@ -153,6 +153,75 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 }
 .back:active { transform: translateY(2px); box-shadow: none; }
 
+/* technology topics in the network panel */
+.d-h { margin: 10px 0 0; font: 400 12px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.topics { display: grid; gap: 6px; }
+.topic {
+  display: grid; gap: 1px; text-align: left; padding: 7px 10px;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; box-shadow: 0 2px 0 var(--ink);
+  min-width: 0;
+}
+.topic b { font-size: 13.5px; font-weight: 800; }
+.topic span { font-size: 11.5px; color: var(--muted); font-weight: 700; line-height: 1.25; }
+.topic:hover { background: color-mix(in srgb, var(--c) 14%, var(--paper)); }
+.topic[aria-pressed="true"] { background: var(--c); color: var(--paper); transform: translateY(2px); box-shadow: none; }
+.topic[aria-pressed="true"] span { color: rgb(255 255 255 / 0.85); }
+
+/* the explainer card */
+.tech {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  width: min(560px, calc(100% - 32px));
+  padding: 12px 16px 14px;
+  background: var(--paper); border: var(--line); border-radius: 16px; box-shadow: var(--lift);
+  border-top: 10px solid var(--c);
+  display: grid; gap: 4px;
+}
+.tech .x {
+  position: absolute; top: 6px; right: 8px; width: 30px; height: 30px;
+  border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); font-size: 20px; line-height: 1; padding: 0;
+}
+.t-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.tech h3 { margin: 0 36px 2px 0; font: 400 24px/1.05 var(--display); letter-spacing: 0.01em; text-wrap: balance; }
+.tech p { margin: 0; max-width: 62ch; min-height: 3.6em; }
+.t-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper); }
+.dots i.on { background: var(--c); }
+.t-btns { display: flex; gap: 8px; }
+.t-btns button {
+  padding: 7px 14px; border: 2px solid var(--ink); border-radius: 10px;
+  background: var(--paper); box-shadow: 0 2px 0 var(--ink); font-weight: 800;
+}
+.t-btns button:disabled { opacity: 0.4; box-shadow: none; }
+.t-btns button:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+.tech:not([hidden]) ~ .hint { display: none; }
+
+/* tags the explainers pin to the scene */
+.fxtag {
+  position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform;
+  font: 800 11.5px/1 var(--body); color: var(--ink);
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; padding: 4px 7px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+.fxtag.ride { font-variant-numeric: tabular-nums; }
+.fxtag.mark.cut { background: #ffe5e8; border-color: #e63946; color: #b3202c; }
+.fxtag.mark.block { background: #fff4d6; }
+.fxtag.mep { background: #e0f7f4; border-radius: 999px; }
+.fxtag.note { background: #eef4fb; }
+.fxtag.note.warn { background: #ffe5e8; color: #b3202c; border-color: #e63946; }
+.fxtag .sid { font-family: var(--display); font-weight: 400; font-size: 13px; letter-spacing: 0.04em; }
+.fxtag .stack { display: inline-flex; gap: 2px; }
+.fxtag .stack b { display: inline-block; padding: 2px 6px; background: #2f80ed; color: #fff; border-radius: 4px; font-family: var(--display); font-weight: 400; letter-spacing: 0.04em; }
+.fxtag .stack.empty { color: var(--muted); }
+.fxtag .ccm { color: #0b7a6f; }
+.fxtag.queue { padding: 6px 8px 4px; }
+.q { display: flex; gap: 6px; align-items: flex-end; }
+.lane { display: grid; justify-items: center; gap: 3px; }
+.lane i { display: block; width: 14px; height: 10%; min-height: 3px; background: var(--c); border: 2px solid var(--ink); border-radius: 3px; align-self: end; transition: height 0.8s ease; }
+.lane { height: 54px; grid-template-rows: 1fr auto; }
+.lane span { font-size: 9.5px; font-weight: 800; color: var(--muted); }
+
 /* info card */
 .card {
   top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px;
@@ -204,12 +273,16 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     padding: 8px; gap: 6px;
     max-height: 42%;
   }
-  .panel > h2 { display: none; }
+  .panel > h2:not(#d-title) { display: none; }
   .major { grid-template-columns: 20px 1fr auto; gap: 6px; padding: 6px 8px; }
   .st { display: none; }
   .nm { font-size: 13px; }
   .detail h2 { font-size: 20px; }
-  #d-blurb { display: none; }
+  #d-blurb, .d-layers { display: none; }
+  .topics { grid-template-columns: 1fr 1fr; }
+  .topic span { display: none; }
+  .tech { bottom: auto; top: calc(78px + env(safe-area-inset-top, 0px)); z-index: 3; }
+  .tech p { min-height: 0; font-size: 13px; }
   .hint { display: none; }
   .card { top: auto; left: 16px; right: 16px; width: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-height: 55%; z-index: 2; }
 }
@@ -253,6 +326,22 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <p id="d-stats" class="d-stats"></p>
     <p id="d-blurb"></p>
     <div id="d-layers" class="d-layers"></div>
+    <h3 class="d-h">Explore the technology</h3>
+    <div id="d-topics" class="topics"></div>
+  </section>
+
+  <section id="tech" class="tech" hidden aria-live="polite">
+    <button id="t-close" class="x" aria-label="Close">&times;</button>
+    <span id="t-tag" class="t-tag"></span>
+    <h3 id="t-title"></h3>
+    <p id="t-say"></p>
+    <div class="t-foot">
+      <div id="t-dots" class="dots" aria-hidden="true"></div>
+      <div class="t-btns">
+        <button id="t-back">Back</button>
+        <button id="t-next" class="primary">Next</button>
+      </div>
+    </div>
   </section>
 
   <aside id="card" class="card" hidden aria-live="polite">
@@ -1719,8 +1808,10 @@ function buildDetail(world, part) {
     scene.add(mesh);
     packets.push({ layer, mesh, runs });
   }
+  let fxRef = null;
   const m4 = new THREE.Matrix4(), v = new THREE.Vector3();
-  function update(t, traffic) {
+  function update(t, traffic, dt = 0) {
+    fxRef.update(dt, t);
     for (const { layer, mesh, runs } of packets) {
       mesh.visible = traffic;
       if (!traffic) continue;
@@ -1746,7 +1837,515 @@ function buildDetail(world, part) {
   ring.visible = false;
   scene.add(ring);
 
-  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir };
+  const fx = buildFx({ scene, nodes, links, nodeObjs, linkObjs, space });
+  fxRef = fx;
+  return { scene, nodes, links, nodeObjs, linkObjs, pickables, ring, ringMesh, update, extent, space, center, viewDir, fx };
+}
+
+// ---------------------------------------------------------------- effects
+//
+// What a technology explainer can do to the network on screen: light links up or
+// dim them, cut or block one, put a glow under a site, run a labelled packet along
+// a path, pin an HTML tag or a queue readout to a point. `clear()` puts it all back.
+
+
+function buildFx({ scene, nodes, links, nodeObjs, linkObjs, space }) {
+  const k = space.k;
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const base = {};
+  for (const id in linkObjs) base[id] = linkObjs[id].mat.color.clone();
+  const packets = [], spots = [], anchors = [], temps = [];
+  const Y = new THREE.Vector3(0, 1, 0);
+  const upAt = (o) => Y.clone().applyQuaternion(o.quaternion);
+
+  // the link joining two sites in this view, if any
+  const link = (a, b) => links.find((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a))?.id ?? null;
+  // every link in this view, or just those of one layer
+  const linksOf = (layer) => links.filter((l) => !layer || l.layer === layer).map((l) => l.id);
+
+  // shortest path by hops from one site to another, optionally keeping off some links
+  function path(from, to, avoid = []) {
+    const skip = new Set(avoid);
+    const prev = { [from]: null }, queue = [from];
+    while (queue.length) {
+      const cur = queue.shift();
+      if (cur === to) break;
+      for (const l of links) {
+        if (skip.has(l.id)) continue;
+        const next = l.a === cur ? l.b : l.b === cur ? l.a : null;
+        if (next && !(next in prev)) { prev[next] = cur; queue.push(next); }
+      }
+    }
+    if (!(to in prev)) return null;
+    const out = [];
+    for (let n = to; n; n = prev[n]) out.unshift(n);
+    return out;
+  }
+
+  const nodePos = (id, lift = 0) => nodeObjs[id].position.clone().addScaledVector(upAt(nodeObjs[id]), lift * k);
+
+  function linkState(id, state) {
+    const o = linkObjs[id];
+    if (!o) return;
+    o.mat.transparent = state === 'dim';
+    o.mat.opacity = state === 'dim' ? 0.14 : 1;
+    o.mat.depthWrite = state !== 'dim';
+    o.ink.visible = state !== 'dim';
+    o.mesh.visible = state !== 'off';
+    o.mat.color.copy(base[id]);
+    if (state === 'glow') o.mat.color.lerp(new THREE.Color('#ffffff'), 0.3);
+    if (state === 'cut') o.mat.color.set('#b0b7c3');
+    o.mat.needsUpdate = true;
+  }
+
+  // light a set of links (and nothing else)
+  function focus(linkIds) {
+    const keep = new Set(linkIds);
+    for (const id in linkObjs) linkState(id, keep.has(id) ? 'glow' : 'dim');
+  }
+  const pathLinks = (ids) => ids.slice(1).map((b, i) => link(ids[i], b));
+
+  function spot(id, color = '#ffffff') {
+    const o = nodeObjs[id];
+    const m = new THREE.Mesh(new THREE.TorusGeometry(2.6 * k, 0.22 * k, 8, 36), new THREE.MeshBasicMaterial({ color }));
+    m.rotation.x = -Math.PI / 2;
+    m.raycast = () => {};
+    const g = new THREE.Group();
+    g.position.copy(o.position);
+    g.quaternion.copy(o.quaternion);
+    g.add(m);
+    scene.add(g);
+    spots.push({ g, m, phase: Math.random() * 6 });
+    o.scale.setScalar(k * 1.1);
+    return g;
+  }
+
+  // an HTML element that follows a 3D point (a fixed vector or a function returning one)
+  function anchor(html, at, cls = '') {
+    const el = document.createElement('div');
+    el.className = 'fxtag ' + cls;
+    el.innerHTML = html;
+    document.querySelector('#detail-labels').append(el);
+    const a = { el, at: typeof at === 'function' ? at : () => at };
+    anchors.push(a);
+    return a;
+  }
+
+  // a cut or a block marker on the middle of a link
+  function marker(linkId, kind) {
+    const o = linkObjs[linkId];
+    const mid = o.table[Math.floor(o.table.length / 2)].clone();
+    if (kind === 'cut') linkState(linkId, 'cut');
+    return anchor(kind === 'cut' ? '<b>✕</b> fibre cut' : '<b>▮</b> RPL blocked', mid, 'mark ' + kind);
+  }
+
+  // a packet running along a path of sites; `tag` is HTML that rides with it
+  function packet(ids, { color = '#ffffff', speed = 14, loop = true, tag = null, size = 0.55, onHop = null, delay = 0 } = {}) {
+    const pts = [], hops = [0];
+    for (let i = 1; i < ids.length; i++) {
+      const lid = link(ids[i - 1], ids[i]);
+      if (!lid) continue;
+      const l = links.find((x) => x.id === lid);
+      let tab = linkObjs[lid].table;
+      if (l.a !== ids[i - 1]) tab = [...tab].reverse();
+      for (const p of tab) if (!pts.length || pts[pts.length - 1].distanceTo(p) > 1e-4) pts.push(p.clone());
+      hops.push(pts.length - 1);
+    }
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(size * k, 12, 10), new THREE.MeshBasicMaterial({ color }));
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(size * k * 1.5, 12, 10), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3 }));
+    mesh.add(halo);
+    mesh.raycast = () => {};
+    mesh.visible = false;
+    scene.add(mesh);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    const total = cum[cum.length - 1] || 1;
+    const pk = { mesh, pts, cum, total, hops, speed: speed * k, loop, s: -delay * speed * k, hop: 0, onHop, tagEl: null, done: false };
+    if (tag) pk.tag = anchor(tag, () => mesh.position.clone().addScaledVector(Y, 1.6 * k), 'ride');
+    packets.push(pk);
+    return pk;
+  }
+
+  // a queue readout pinned above a site: lanes of bars, each a class of traffic
+  function queue(id, lanes) {
+    const html = `<div class="q">${lanes.map((l) => `<div class="lane"><i style="--c:${l.color};height:${Math.round(l.fill * 100)}%"></i><span>${l.name}</span></div>`).join('')}</div>`;
+    const a = anchor(html, nodePos(id, 7), 'queue');
+    return { set: (i, fill) => { a.el.querySelectorAll('i')[i].style.height = Math.round(fill * 100) + '%'; } };
+  }
+
+  function clear() {
+    for (const id in linkObjs) linkState(id, 'normal');
+    for (const pk of packets) { scene.remove(pk.mesh); }
+    for (const s of spots) scene.remove(s.g);
+    for (const a of anchors) a.el.remove();
+    for (const o of temps) scene.remove(o);
+    for (const n of nodes) nodeObjs[n.id].scale.setScalar(k);
+    packets.length = spots.length = anchors.length = temps.length = 0;
+  }
+
+  function update(dt, t) {
+    for (const s of spots) {
+      const p = 1 + 0.12 * Math.sin(t * 4 + s.phase);
+      s.m.scale.set(p, p, 1);
+    }
+    for (const pk of packets) {
+      if (pk.done) continue;
+      pk.s += pk.speed * dt;
+      if (pk.s < 0) continue;
+      if (pk.s >= pk.total) {
+        if (pk.loop) { pk.s -= pk.total; pk.hop = 0; if (pk.onHop) pk.onHop(0, pk); }
+        else { pk.s = pk.total; pk.done = true; if (pk.onHop) pk.onHop(pk.hops.length - 1, pk); }
+      }
+      pk.mesh.visible = true;
+      let i = 1;
+      while (i < pk.cum.length - 1 && pk.cum[i] < pk.s) i++;
+      const f = (pk.s - pk.cum[i - 1]) / ((pk.cum[i] - pk.cum[i - 1]) || 1);
+      pk.mesh.position.lerpVectors(pk.pts[i - 1], pk.pts[i], Math.min(1, f));
+      const hop = pk.hops.findIndex((h, j) => j === pk.hops.length - 1 || pk.hops[j + 1] > i - 1);
+      if (hop !== pk.hop) { pk.hop = hop; if (pk.onHop) pk.onHop(hop, pk); }
+    }
+  }
+
+  return { byId, link, linksOf, path, pathLinks, nodePos, linkState, focus, spot, anchor, marker, packet, queue, clear, update, anchors };
+}
+
+
+// Technology explainers: for each network, the technologies that matter in that
+// space, each told in a few steps that play out live on the network. A step gets
+// a clean scene and describes everything it wants shown, so Back and Next are
+// just "show step i". No three.js in here; the steps talk to the view's `fx`.
+
+const TC = {
+  wave: '#ff7f50', wave2: '#9b5de5', wave3: '#2ec4b6', red: '#e63946', white: '#ffffff',
+  voice: '#e63946', video: '#ff8c1a', biz: '#2f80ed', best: '#8d99ae', ccm: '#2ec4b6', frame: '#7b2cbf',
+};
+
+// Reusable scene recipes.
+const glowPath = (fx, ids) => { fx.focus(fx.pathLinks(ids)); return ids; };
+const cores = (fx) => Object.values(fx.byId).filter((n) => n.type === 'core').map((n) => n.id);
+const ofType = (fx, t) => Object.values(fx.byId).filter((n) => n.type === t).map((n) => n.id);
+const sidTag = (sid) => `<span class="sid">${sid}</span>`;
+const stackTag = (labels) => `<span class="stack">${labels.map((l) => `<b>${l}</b>`).join('')}</span>`;
+
+// A packet whose label stack pops one label at each hop.
+function srPacket(fx, ids, sids, color = TC.biz, speed = 9) {
+  const pk = fx.packet(ids, { color, speed, tag: stackTag(sids) });
+  pk.onHop = (hop) => { pk.tag.el.innerHTML = stackTag(sids.slice(hop)) || '<span class="stack empty">payload</span>'; };
+  return pk;
+}
+
+// Continuity-check heartbeats both ways between two MEPs.
+function ccm(fx, a, b, period = 1.4) {
+  const ids = fx.path(a, b);
+  fx.focus(fx.pathLinks(ids));
+  fx.anchor('<b>MEP</b>', fx.nodePos(a, 6), 'mep');
+  fx.anchor('<b>MEP</b>', fx.nodePos(b, 6), 'mep');
+  fx.packet(ids, { color: TC.ccm, speed: 16, size: 0.35, tag: '<span class="ccm">CCM</span>' });
+  fx.packet([...ids].reverse(), { color: TC.ccm, speed: 16, size: 0.35, delay: period / 2, tag: '<span class="ccm">CCM</span>' });
+  return ids;
+}
+
+const TOPICS = {
+  longhaul: [
+    {
+      id: 'rls', name: 'The line system', tag: 'Ciena RLS with WaveLogic 6',
+      summary: 'What carries the light between cities: fibre, amplifiers and the ROADMs at each end.',
+      steps: [
+        {
+          say: 'A Reconfigurable Line System is the glass and the amplifiers. Every span here is a fibre pair with an amplifier hut every 80 km or so, boosting the light so it reaches the next ROADM.',
+          run: (fx) => { fx.focus(fx.linksOf()); for (const id of ofType(fx, 'ila')) fx.spot(id, TC.red); },
+        },
+        {
+          say: 'A wavelength launched at Oakridge rides the same fibre all the way to the Capitalia North hub without ever being turned back into electrons. Watch it pass the amp huts.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('bb_oak', 'hub_n')); fx.packet(ids, { color: TC.wave, speed: 12, tag: 'λ 1550.12 nm' }); },
+        },
+        {
+          say: 'Each wave is one WaveLogic 6 channel, up to 1.6 Tb/s on a single colour of light. Dozens of colours share one fibre; here three of them ride the same glass.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('bb_oak', 'hub_n')); [TC.wave, TC.wave2, TC.wave3].forEach((c, i) => fx.packet(ids, { color: c, speed: 12, delay: i * 0.9 })); },
+        },
+      ],
+    },
+    {
+      id: 'cdc', name: 'CDC ROADMs', tag: 'Ciena RLS CDC ROADM',
+      summary: 'Colorless, directionless, contentionless switching of light at a five-degree site.',
+      steps: [
+        {
+          say: 'Junction is a five-degree ROADM: five fibre directions meet here, and any wavelength can be switched from any direction to any other, all in the optical domain.',
+          run: (fx) => { fx.focus(['bb_oak', 'bb_mid', 'bb_lake', 'bb_south', 'bb_stone'].map((o) => fx.link('bb_junc', o))); fx.spot('bb_junc', TC.red); },
+        },
+        {
+          say: 'Colorless: an add/drop port is not tied to one wavelength. A transponder plugged in at Junction can be tuned to any colour, so three different channels can leave the same port.',
+          run: (fx) => { fx.spot('bb_junc', TC.red); const ids = glowPath(fx, ['bb_junc', 'bb_stone']); [TC.wave, TC.wave2, TC.wave3].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.7, tag: ['λ 1550.12', 'λ 1551.72', 'λ 1553.33'][i] })); },
+        },
+        {
+          say: 'Directionless: that same port can send its wave out of any degree. The same channel is steered east toward Stonebridge or south toward Southvale by software, with nobody touching a patch cord.',
+          run: (fx) => { fx.spot('bb_junc', TC.red); fx.focus([fx.link('bb_junc', 'bb_stone'), fx.link('bb_junc', 'bb_south')]); fx.packet(['bb_junc', 'bb_stone'], { color: TC.wave, speed: 10, tag: 'λ 1550.12 → east' }); fx.packet(['bb_junc', 'bb_south'], { color: TC.wave, speed: 10, delay: 1.2, tag: 'λ 1550.12 → south' }); },
+        },
+        {
+          say: 'Contentionless: two waves of the same colour arriving from different directions can both be dropped at Junction without colliding. Here the same channel comes in from Oakridge and from Midhill at once.',
+          run: (fx) => { fx.spot('bb_junc', TC.red); fx.focus([fx.link('bb_oak', 'bb_junc'), fx.link('bb_mid', 'bb_junc')]); fx.packet(['bb_oak', 'bb_junc'], { color: TC.wave, speed: 10, tag: 'λ 1550.12' }); fx.packet(['bb_mid', 'bb_junc'], { color: TC.wave, speed: 10, delay: 0.3, tag: 'λ 1550.12' }); },
+        },
+      ],
+    },
+    {
+      id: 'restore', name: 'Mesh restoration', tag: 'Ciena RLS control plane',
+      summary: 'What a fibre cut does to a wave, and how the mesh relights it round the break.',
+      steps: [
+        {
+          say: 'A wave from Oakridge to the Capitalia West hub normally takes the short way: Oakridge, Junction, Stonebridge, into the metro.',
+          run: (fx) => { const ids = glowPath(fx, ['bb_oak', 'bb_junc', 'bb_stone', 'hub_w']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
+        },
+        {
+          say: 'A backhoe finds the Junction–Stonebridge span. Every wave on it goes dark.',
+          run: (fx) => { glowPath(fx, ['bb_oak', 'bb_junc']); fx.marker(fx.link('bb_junc', 'bb_stone'), 'cut'); fx.packet(['bb_oak', 'bb_junc'], { color: TC.wave, speed: 12 }); },
+        },
+        {
+          say: 'Because every site in the mesh has three or more routes out, the control plane re-tunes the ROADMs and the wave is relit over a path round the cut: here via Southvale and Millbrook.',
+          run: (fx) => { const cut = fx.link('bb_junc', 'bb_stone'); const ids = glowPath(fx, fx.path('bb_oak', 'hub_w', [cut])); fx.marker(cut, 'cut'); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
+        },
+        {
+          say: 'Once the span is spliced, the wave reverts to the short path.',
+          run: (fx) => { const ids = glowPath(fx, ['bb_oak', 'bb_junc', 'bb_stone', 'hub_w']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.5 }); },
+        },
+      ],
+    },
+  ],
+
+  metro: [
+    {
+      id: 'ring', name: 'Fixed ROADM ring', tag: 'Ciena 6500 with WaveLogic 5 Nano',
+      summary: 'Two-degree ROADMs on a ring: simpler and cheaper than the long-haul mesh.',
+      steps: [
+        {
+          say: 'Metro transport does not need five-degree switching. The four Capitalia hubs sit on a two-degree ring: each ROADM has an east side and a west side, and fixed filters that add and drop that hub’s own wavelengths.',
+          run: (fx) => { fx.focus([fx.link('hub_n', 'hub_e'), fx.link('hub_e', 'hub_s'), fx.link('hub_s', 'hub_w'), fx.link('hub_w', 'hub_n')]); for (const h of ['hub_n', 'hub_e', 'hub_s', 'hub_w']) fx.spot(h, '#14b8a6'); },
+        },
+        {
+          say: 'A wave added at the West hub for the East hub goes clockwise round the ring, passing straight through North without being touched.',
+          run: (fx) => { const ids = glowPath(fx, ['hub_w', 'hub_n', 'hub_e']); fx.spot('hub_w', '#14b8a6'); fx.spot('hub_e', '#14b8a6'); fx.packet(ids, { color: TC.wave, speed: 12, tag: 'add at West · drop at East' }); },
+        },
+      ],
+    },
+    {
+      id: 'protect', name: 'Ring protection', tag: 'Ciena 6500 optical protection',
+      summary: 'Every hub can reach every other in two directions.',
+      steps: [
+        {
+          say: 'Normally traffic takes the short way round the ring.',
+          run: (fx) => { const ids = glowPath(fx, ['hub_w', 'hub_n', 'hub_e']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.4 }); },
+        },
+        {
+          say: 'The span between North and East is cut. The ring heals: the West hub’s wave is switched out of its other degree and goes the long way round, via South, in under 50 ms.',
+          run: (fx) => { fx.marker(fx.link('hub_n', 'hub_e'), 'cut'); const ids = glowPath(fx, ['hub_w', 'hub_s', 'hub_e']); fx.packet(ids, { color: TC.wave, speed: 12 }); fx.packet(ids, { color: TC.wave, speed: 12, delay: 1.4 }); },
+        },
+      ],
+    },
+    {
+      id: 'dci', name: 'Data center interconnect', tag: 'Ciena Waveserver',
+      summary: 'The campuses talk to each other on their own point-to-point waves.',
+      steps: [
+        {
+          say: 'The four data centers have a ring of their own: Waveserver boxes in each campus light point-to-point waves straight to the next campus, with huge capacity and very little to configure.',
+          run: (fx) => { const ring = ['dc_nw', 'dc_ne', 'dc_se', 'dc_sw', 'dc_nw']; glowPath(fx, ring); fx.packet(ring, { color: TC.wave2, speed: 14 }); fx.packet([...ring].reverse(), { color: TC.wave2, speed: 14, delay: 0.8 }); },
+        },
+        {
+          say: 'The harbor campus hands its waves to the cable landing station, so a data center across the sea is just another hop of DCI.',
+          run: (fx) => { const ids = glowPath(fx, ['dc_nw', 'dc_ne', 'dc_se', 'cls_port']); fx.spot('cls_port', '#ffc300'); fx.packet(ids, { color: TC.wave2, speed: 14, tag: 'to the subsea cable' }); },
+        },
+      ],
+    },
+  ],
+
+  submarine: [
+    {
+      id: 'slt', name: 'Line terminals and repeaters', tag: 'Ciena GeoMesh Extreme',
+      summary: 'How light crosses an ocean.',
+      steps: [
+        {
+          say: 'A submarine line terminal at each landing station launches the waves. Every 60–80 km a repeater on the seabed, powered over the cable’s copper conductor, amplifies them again.',
+          run: (fx) => { const ids = glowPath(fx, ['cls_port', 'cls_south']); for (const id of Object.keys(fx.byId).filter((x) => x.startsWith('rep_cls_port_cls_south'))) fx.spot(id, '#ffc300'); fx.spot('cls_port', '#ffc300'); fx.spot('cls_south', '#ffc300'); fx.packet(ids, { color: TC.wave, speed: 24 }); },
+        },
+        {
+          say: 'One fibre pair carries many colours. A cable owner can sell a slice of its spectrum to a tenant, who lights it with their own WaveLogic transponders at each landing station.',
+          run: (fx) => { const ids = glowPath(fx, ['cls_port', 'cls_isla_w']); [TC.wave, TC.wave2, TC.wave3].forEach((c, i) => fx.packet(ids, { color: c, speed: 18, delay: i * 0.6, tag: ['owner', 'tenant A', 'tenant B'][i] })); },
+        },
+      ],
+    },
+  ],
+
+  ipcore: [
+    {
+      id: 'sr', name: 'Segment routing (SR-MPLS)', tag: 'Ciena 8100 Coherent Routers',
+      summary: 'The sender writes the route into the packet as a stack of labels.',
+      steps: [
+        {
+          say: 'Each core router owns a node segment: a label such as 16003 that means "get to me". There is no path state in the middle of the network; the route lives in the packet.',
+          run: (fx) => { cores(fx).forEach((id, i) => { fx.spot(id, TC.biz); fx.anchor(sidTag(16001 + i), fx.nodePos(id, 6.5)); }); },
+        },
+        {
+          say: 'Gateway Bay wants a packet to reach Edgewater via Coreburg 1 and Coreburg 2, so it pushes the segment list [16001, 16002, 16005] onto it.',
+          run: (fx) => { const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge']); ['cr_c1', 'cr_c2', 'cr_edge'].forEach((id, i) => fx.anchor(sidTag([16001, 16002, 16005][i]), fx.nodePos(id, 6.5))); srPacket(fx, ids, ['16001', '16002', '16005']); },
+        },
+        {
+          say: 'Each hop pops the top label and forwards on the next one. By Edgewater the stack is empty and only the payload is left.',
+          run: (fx) => { const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge']); srPacket(fx, ids, ['16001', '16002', '16005'], TC.biz, 6); },
+        },
+      ],
+    },
+    {
+      id: 'tilfa', name: 'TI-LFA fast reroute', tag: 'Ciena 8100, SR-MPLS',
+      summary: 'A repair path computed before the failure, used in under 50 ms.',
+      steps: [
+        {
+          say: 'Before anything fails, every router has already computed a loop-free repair path for each of its links. Gateway Bay to Edgewater normally goes through the Coreburg pair.',
+          run: (fx) => { const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_c2', 'cr_edge']); fx.packet(ids, { color: TC.biz, speed: 12 }); fx.packet(ids, { color: TC.biz, speed: 12, delay: 1.2 }); },
+        },
+        {
+          say: 'Coreburg 1 loses its link to Coreburg 2. Within 50 ms it pushes its precomputed repair segments and steers packets via Northport to Edgewater, long before the routing protocol has noticed.',
+          run: (fx) => { fx.marker(fx.link('cr_c1', 'cr_c2'), 'cut'); const ids = glowPath(fx, ['cr_gw', 'cr_c1', 'cr_north', 'cr_edge']); fx.spot('cr_c1', TC.red); srPacket(fx, ids, ['16001', '16004', '16005'], TC.biz, 11); },
+        },
+        {
+          say: 'Once the IGP has converged, the repair path is dropped for the new best path straight through Northport.',
+          run: (fx) => { fx.marker(fx.link('cr_c1', 'cr_c2'), 'cut'); const ids = glowPath(fx, ['cr_gw', 'cr_north', 'cr_edge']); fx.packet(ids, { color: TC.biz, speed: 12 }); fx.packet(ids, { color: TC.biz, speed: 12, delay: 1.2 }); },
+        },
+      ],
+    },
+  ],
+
+  aggregation: [
+    {
+      id: 'g8032', name: 'G.8032 ring protection', tag: 'Ciena 5170 aggregation routers',
+      summary: 'An Ethernet ring that cannot loop, and heals in under 50 ms.',
+      steps: [
+        {
+          say: 'The four aggregation routers form an Ethernet ring. One link, the Ring Protection Link, is deliberately blocked by its owner so frames can never loop.',
+          run: (fx) => { fx.focus([fx.link('ag_w', 'ag_n'), fx.link('ag_n', 'ag_e'), fx.link('ag_e', 'ag_s'), fx.link('ag_s', 'ag_w')]); fx.marker(fx.link('ag_s', 'ag_w'), 'block'); for (const a of ['ag_w', 'ag_n', 'ag_e', 'ag_s']) fx.spot(a, TC.frame); },
+        },
+        {
+          say: 'So frames from West to South go the long way: North, East, South.',
+          run: (fx) => { fx.marker(fx.link('ag_s', 'ag_w'), 'block'); const ids = glowPath(fx, ['ag_w', 'ag_n', 'ag_e', 'ag_s']); fx.packet(ids, { color: TC.frame, speed: 12 }); fx.packet(ids, { color: TC.frame, speed: 12, delay: 1.3 }); },
+        },
+        {
+          say: 'The North–East span fails. Both ends raise a Signal Fail, flood R-APS messages round the ring, and the RPL owner unblocks its link: under 50 ms, no spanning tree involved.',
+          run: (fx) => { fx.marker(fx.link('ag_n', 'ag_e'), 'cut'); const ids = glowPath(fx, ['ag_w', 'ag_s']); fx.spot('ag_w', TC.frame); fx.packet(['ag_e', 'ag_n'], { color: TC.red, speed: 20, size: 0.3, tag: 'R-APS (SF)' }); fx.packet(['ag_n', 'ag_w'], { color: TC.red, speed: 20, size: 0.3, delay: 0.6, tag: 'R-APS (SF)' }); fx.packet(ids, { color: TC.frame, speed: 12 }); },
+        },
+        {
+          say: 'Every node flushes its MAC table and relearns. The short path to South is now live, and the ring is still a ring.',
+          run: (fx) => { fx.marker(fx.link('ag_n', 'ag_e'), 'cut'); const ids = glowPath(fx, ['ag_w', 'ag_s']); fx.packet(ids, { color: TC.frame, speed: 12 }); fx.packet(ids, { color: TC.frame, speed: 12, delay: 1.3 }); for (const a of ['ag_w', 'ag_n', 'ag_e', 'ag_s']) fx.anchor('<b>FDB flush</b>', fx.nodePos(a, 6), 'note'); },
+        },
+      ],
+    },
+    {
+      id: 'ethagg', name: 'Low-cost Ethernet aggregation', tag: 'Ciena 3900 series NIDs, 5170',
+      summary: 'Below the core there is no MPLS at all.',
+      steps: [
+        {
+          say: 'A bank branch gets an E-Line service: a NID at the branch tags its frames with a VLAN, the ring carries them to the aggregation router, and only there do they meet the core.',
+          run: (fx) => { const ids = glowPath(fx, fx.path('end_0_1', 'cr_c2')); fx.spot('end_0_1', '#ff4fa3'); fx.packet(ids, { color: '#ff4fa3', speed: 10, tag: 'VLAN 120 · E-Line' }); fx.packet([...ids].reverse(), { color: '#ff4fa3', speed: 10, delay: 1, tag: 'VLAN 120' }); },
+        },
+        {
+          say: 'That keeps the edge cheap: fixed-function Ethernet boxes, no label switching, no routing protocol at the customer site. Intelligence sits in the ring and the core, where it is shared.',
+          run: (fx) => { for (const id of Object.keys(fx.byId).filter((x) => x.startsWith('end_'))) fx.spot(id, '#ff4fa3'); fx.focus(fx.linksOf('access')); },
+        },
+      ],
+    },
+    {
+      id: 'qos', name: 'Quality of service', tag: 'Hierarchical QoS on the 5170',
+      summary: 'Voice, business data and internet share one uplink without hurting each other.',
+      steps: [
+        {
+          say: 'The East aggregation router carries voice, video, business data and best-effort internet on one uplink to the core. Each class is marked (p-bits or DSCP) and goes into its own queue.',
+          run: (fx) => { fx.queue('ag_e', [{ name: 'Voice', color: TC.voice, fill: 0.2 }, { name: 'Video', color: TC.video, fill: 0.3 }, { name: 'Business', color: TC.biz, fill: 0.35 }, { name: 'Best effort', color: TC.best, fill: 0.4 }]); const ids = glowPath(fx, ['ag_e', 'cr_c2']); [TC.voice, TC.video, TC.biz, TC.best].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.5, size: 0.45 })); fx.spot('ag_e', TC.frame); },
+        },
+        {
+          say: 'When the uplink is congested the scheduler serves the strict-priority voice queue first, then shares the rest by weight. Best effort absorbs the loss; voice never notices.',
+          run: (fx) => { fx.queue('ag_e', [{ name: 'Voice', color: TC.voice, fill: 0.1 }, { name: 'Video', color: TC.video, fill: 0.45 }, { name: 'Business', color: TC.biz, fill: 0.6 }, { name: 'Best effort', color: TC.best, fill: 0.98 }]); const ids = glowPath(fx, ['ag_e', 'cr_c2']); [TC.voice, TC.voice, TC.video, TC.biz].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.45, size: 0.45 })); fx.anchor('<b>drop</b> best effort', fx.nodePos('ag_e', 3.5), 'note warn'); },
+        },
+        {
+          say: 'Policers at the customer NIDs enforce each contract on the way in, so no single service can flood the ring beyond what it bought.',
+          run: (fx) => { for (const id of Object.keys(fx.byId).filter((x) => x.startsWith('end_'))) { fx.spot(id, '#ff4fa3'); fx.anchor('<b>policer</b> 100 Mb/s', fx.nodePos(id, 6), 'note'); } },
+        },
+      ],
+    },
+    {
+      id: 'cfm', name: 'Connectivity fault management', tag: '802.1ag / Y.1731 on 3900 NIDs',
+      summary: 'Heartbeats that prove a service is up, and measure how well.',
+      steps: [
+        {
+          say: 'Each end of the bank’s service hosts a Maintenance End Point. The two MEPs exchange Continuity Check Messages every 100 ms; while they keep arriving, the service is up.',
+          run: (fx) => ccm(fx, 'end_0_1', 'ag_e'),
+        },
+        {
+          say: 'Y.1731 adds measurement: loss and delay messages ride the same path, so the SLA is measured end to end rather than guessed from counters.',
+          run: (fx) => { const ids = fx.path('end_0_1', 'ag_e'); fx.focus(fx.pathLinks(ids)); fx.anchor('<b>MEP</b>', fx.nodePos('end_0_1', 6), 'mep'); fx.anchor('<b>MEP</b>', fx.nodePos('ag_e', 6), 'mep'); fx.packet(ids, { color: TC.video, speed: 14, size: 0.35, tag: '<span class="ccm">DMM</span>' }); fx.packet([...ids].reverse(), { color: TC.video, speed: 14, size: 0.35, delay: 0.5, tag: '<span class="ccm">DMR · 1.8 ms</span>' }); fx.packet(ids, { color: TC.biz, speed: 14, size: 0.35, delay: 1.1, tag: '<span class="ccm">LMM</span>' }); },
+        },
+        {
+          say: 'The access ring is cut between the bank and the router. After three missed CCMs the far MEP declares loss of continuity, raises an alarm, and sends AIS toward the customer so they know before they call.',
+          run: (fx) => { const ids = fx.path('end_0_1', 'ag_e'); fx.focus(fx.pathLinks(ids)); fx.marker(fx.link(ids[0], ids[1]), 'cut'); fx.anchor('<b>MEP</b>', fx.nodePos('end_0_1', 6), 'mep'); fx.anchor('<b>LOC</b> alarm', fx.nodePos('ag_e', 6), 'note warn'); fx.spot('ag_e', TC.red); },
+        },
+      ],
+    },
+  ],
+
+  xhaul: [
+    {
+      id: 'qos', name: 'QoS for 5G xhaul', tag: 'Ciena 5164 cell-site router',
+      summary: 'Radio traffic goes first; everything else waits.',
+      steps: [
+        {
+          say: 'A cell-site router carries fronthaul (eCPRI), midhaul, backhaul and timing on one fibre. Fronthaul gets the strict-priority queue: its latency budget is about 100 µs.',
+          run: (fx) => { fx.queue('xh_bright', [{ name: 'Fronthaul', color: TC.voice, fill: 0.25 }, { name: 'Timing', color: TC.video, fill: 0.1 }, { name: 'Midhaul', color: TC.biz, fill: 0.4 }, { name: 'Backhaul', color: TC.best, fill: 0.5 }]); const ids = glowPath(fx, ['end_3_0', 'xh_bright']); [TC.voice, TC.video, TC.biz, TC.best].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.45, size: 0.45 })); fx.spot('end_3_0', '#00a6d6'); },
+        },
+        {
+          say: 'Everything else is shaped behind it, so a busy backhaul can never delay the radio. The queue readout shows backhaul backing up while fronthaul stays almost empty.',
+          run: (fx) => { fx.queue('xh_bright', [{ name: 'Fronthaul', color: TC.voice, fill: 0.1 }, { name: 'Timing', color: TC.video, fill: 0.05 }, { name: 'Midhaul', color: TC.biz, fill: 0.55 }, { name: 'Backhaul', color: TC.best, fill: 0.95 }]); const ids = glowPath(fx, ['end_3_0', 'xh_bright']); [TC.voice, TC.voice, TC.voice, TC.best].forEach((c, i) => fx.packet(ids, { color: c, speed: 10, delay: i * 0.4, size: 0.45 })); },
+        },
+      ],
+    },
+    {
+      id: 'cfm', name: 'CFM to the cell site', tag: '802.1ag / Y.1731 on the 5164',
+      summary: 'Know a cell has gone dark in milliseconds, not from the complaints.',
+      steps: [
+        {
+          say: 'A MEP on the cell-site router and one on the pre-aggregation hub exchange CCMs continuously. The operator sees a site go dark within milliseconds.',
+          run: (fx) => ccm(fx, 'end_3_0', 'xh_bright'),
+        },
+        {
+          say: 'On a fibre cut the hub raises loss of continuity for that one site while the rest of the ring keeps running.',
+          run: (fx) => { const ids = fx.path('end_3_0', 'xh_bright'); fx.focus(fx.pathLinks(ids)); fx.marker(fx.link(ids[0], ids[1]), 'cut'); fx.anchor('<b>MEP</b>', fx.nodePos('end_3_0', 6), 'mep'); fx.anchor('<b>LOC</b> Cell site 1', fx.nodePos('xh_bright', 6), 'note warn'); fx.spot('xh_bright', TC.red); },
+        },
+      ],
+    },
+    {
+      id: 'ring', name: 'G.8032 on the xhaul ring', tag: 'Ciena 5166 pre-aggregation routers',
+      summary: 'Every cell site reachable from both uplinks.',
+      steps: [
+        {
+          say: 'The pre-aggregation hubs and their cell sites sit on one Ethernet ring, protected by G.8032 like the metro ring. The RPL is out at Leafdale, so traffic from the south normally flows east to the Edgewater uplink.',
+          run: (fx) => { fx.focus(fx.linksOf()); fx.marker(fx.link('xh_leaf', 'end_7_0'), 'block'); const ids = fx.path('xh_south', 'cr_edge', [fx.link('xh_leaf', 'end_7_0')]); fx.packet(ids, { color: '#00a6d6', speed: 14 }); fx.packet(ids, { color: '#00a6d6', speed: 14, delay: 1.5 }); },
+        },
+        {
+          say: 'A cut east of Spinehill unblocks the RPL in under 50 ms and the southern sites swing round to the Gateway Bay uplink. No cell site loses service.',
+          run: (fx) => { const cut = fx.link('xh_spine', 'end_4_0'); fx.marker(cut, 'cut'); const ids = fx.path('xh_south', 'cr_gw', [cut]); glowPath(fx, ids); fx.packet(ids, { color: '#00a6d6', speed: 14 }); fx.packet(ids, { color: '#00a6d6', speed: 14, delay: 1.5 }); },
+        },
+      ],
+    },
+  ],
+};
+
+// Steps through a topic on a view's fx. Each step starts from a clean scene.
+export class TechPlayer {
+  constructor(fx) { this.fx = fx; this.topic = null; this.i = 0; }
+  open(topic, i = 0) { this.topic = topic; return this.show(i); }
+  show(i) {
+    this.i = Math.max(0, Math.min(this.topic.steps.length - 1, i));
+    this.fx.clear();
+    this.topic.steps[this.i].run(this.fx);
+    return this.topic.steps[this.i];
+  }
+  next() { return this.show(this.i + 1); }
+  back() { return this.show(this.i - 1); }
+  close() { this.fx.clear(); this.topic = null; }
 }
 
 
@@ -2044,10 +2643,13 @@ const detailLabels = $('#detail-labels');
 const hint = $('.hint');
 const GLOBE_HINT = hint.textContent;
 
-function openMajor(id) {
-  if (location.hash.slice(1) !== id) { location.hash = id; return; }   // hashchange comes back here
+function openMajor(id, topicId = null) {
+  const want = topicId ? `${id}.${topicId}` : id;
+  if (location.hash.slice(1) !== want) { location.hash = want; return; }   // hashchange comes back here
   const m = MAJOR[id];
+  const already = mode === 'detail' && detail === details[id];
   detail = details[id] ??= buildDetail(world, parts[id]);
+  if (already) { showTopic(topicId); return; }
   mode = 'detail';
   emphasise(null);
   controls.enabled = false;
@@ -2086,15 +2688,68 @@ function openMajor(id) {
     const o = detail.nodeObjs[n.id];
     return { el, pos: o.position.clone().add(new THREE.Vector3(0, (n.type === 'dc' ? 4 : 5) * detail.space.k, 0).applyQuaternion(o.quaternion)) };
   });
+  $('#d-topics').replaceChildren(...TOPICS[id].map((t) => {
+    const b = document.createElement('button');
+    b.className = 'topic';
+    b.dataset.topic = t.id;
+    b.innerHTML = `<b>${t.name}</b><span>${t.summary}</span>`;
+    return b;
+  }));
   panel.hidden = true;
   detailPanel.hidden = false;
   labelLayer.hidden = true;
   detailLabels.hidden = false;
   tip.hidden = true;
   selectInDetail(null);
+  showTopic(topicId);
+}
+
+// ---------------------------------------------------------------- technology explainers
+
+const techCard = $('#tech');
+let player = null;
+function showTopic(topicId) {
+  const majorId = Object.keys(details).find((k) => details[k] === detail);
+  const topic = topicId && TOPICS[majorId].find((t) => t.id === topicId);
+  if (player) { player.close(); player = null; }
+  for (const b of document.querySelectorAll('[data-topic]')) b.setAttribute('aria-pressed', String(b.dataset.topic === topicId));
+  if (!topic) { techCard.hidden = true; return; }
+  selectInDetail(null);
+  player = new TechPlayer(detail.fx);
+  techCard.style.setProperty('--c', MAJOR[majorId].color);
+  $('#t-tag').textContent = topic.tag;
+  $('#t-title').textContent = topic.name;
+  renderStep(player.open(topic));
+  techCard.hidden = false;
+}
+function renderStep(step) {
+  const n = player.topic.steps.length;
+  $('#t-say').textContent = step.say;
+  $('#t-dots').innerHTML = player.topic.steps.map((_, i) => `<i class="${i === player.i ? 'on' : ''}"></i>`).join('');
+  $('#t-back').disabled = player.i === 0;
+  $('#t-next').textContent = player.i === n - 1 ? 'Done' : 'Next';
+}
+$('#d-topics').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-topic]');
+  if (!b) return;
+  const majorId = Object.keys(details).find((k) => details[k] === detail);
+  openMajor(majorId, b.getAttribute('aria-pressed') === 'true' ? null : b.dataset.topic);
+});
+$('#t-next').addEventListener('click', () => {
+  if (!player) return;
+  if (player.i === player.topic.steps.length - 1) { closeTopic(); return; }
+  renderStep(player.next());
+});
+$('#t-back').addEventListener('click', () => { if (player && player.i > 0) renderStep(player.back()); });
+$('#t-close').addEventListener('click', closeTopic);
+function closeTopic() {
+  const majorId = Object.keys(details).find((k) => details[k] === detail);
+  if (majorId) openMajor(majorId, null);
 }
 
 function closeMajor() {
+  if (player) { player.close(); player = null; }
+  techCard.hidden = true;
   mode = 'globe';
   detailControls.enabled = false;
   controls.enabled = true;
@@ -2105,10 +2760,12 @@ function closeMajor() {
   card.hidden = true;
   hint.textContent = GLOBE_HINT;
 }
-$('#btn-back').addEventListener('click', () => { if (location.hash) history.back(); else closeMajor(); });
+// Back goes to the globe in one hop, however many topics were visited on the way.
+$('#btn-back').addEventListener('click', () => { history.pushState(null, '', location.pathname + location.search); route(); });
 function route() {
-  const id = location.hash.slice(1);
-  if (MAJOR[id]) openMajor(id); else if (mode === 'detail') closeMajor();
+  const [id, topicId] = location.hash.slice(1).split('.');
+  if (MAJOR[id]) openMajor(id, TOPICS[id].some((t) => t.id === topicId) ? topicId : null);
+  else if (mode === 'detail') closeMajor();
 }
 addEventListener('hashchange', route);
 
@@ -2268,8 +2925,11 @@ function hover() {
 }
 
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || mode !== 'detail') return;
-  if (selected) selectInDetail(null); else $('#btn-back').click();
+  if (mode !== 'detail') return;
+  if (e.key === 'ArrowRight' && player) $('#t-next').click();
+  if (e.key === 'ArrowLeft' && player) $('#t-back').click();
+  if (e.key !== 'Escape') return;
+  if (selected) selectInDetail(null); else if (player) closeTopic(); else $('#btn-back').click();
 });
 
 // ---------------------------------------------------------------- loop
@@ -2306,14 +2966,19 @@ function frame(now) {
     renderer.render(scene, camera);
   } else {
     detailControls.update();
-    detail.update(t, opts.traffic);
+    detail.update(t, opts.traffic && !player, dt);
     detail.ringMesh.rotation.z = t;
     hover();
     const r = canvas.getBoundingClientRect();
     for (const L of detail.labels) {
       const [x, y, z] = toScreen(L.pos, detailCam, r);
-      L.el.hidden = !opts.labels || z > 1;
+      L.el.hidden = !opts.labels || z > 1 || !!player;
       L.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    }
+    for (const a of detail.fx.anchors) {
+      const [x, y, z] = toScreen(a.at(), detailCam, r);
+      a.el.hidden = z > 1;
+      a.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     }
     renderer.render(detail.scene, detailCam);
   }
@@ -2321,7 +2986,7 @@ function frame(now) {
 }
 route();
 requestAnimationFrame(frame);
-window.netlandia = { world, openMajor, closeMajor, selectInDetail, emphasise, flyTo, camera, controls, nodeObjs };
+window.netlandia = { world, openMajor, closeMajor, selectInDetail, emphasise, flyTo, camera, controls, nodeObjs, get player() { return player; } };
 window.netlandiaFlat = (x, z, side = 0) => flatToDir(x, z, side);
 
 </script>
