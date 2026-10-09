@@ -273,7 +273,7 @@ button.primary { background: var(--accent); color: var(--paper); }
     <ul class="card-links"></ul>
   </aside>
 
-  <p class="hint">Drag to pan · Right-drag to turn and tilt · Scroll or pinch to zoom · Click anything</p>
+  <p class="hint">Drag to spin the planet · Scroll or pinch to zoom · Click anything</p>
 </div>
 <!--/HUD-->
 <script type="module">
@@ -282,8 +282,32 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 // The world of Netlandia: terrain, places and every network, as plain data.
 // No three.js in here, so the tests can check it under node.
 
+// The map is drawn flat in x/z and then wrapped onto a small planet: an azimuthal
+// equidistant projection around the map centre, so distance from (0, 0) on the
+// map is arc length on the planet. Everything far from the centre is the back side.
+const PLANET_R = 100;
+const SEA_FLOOR = -6;
+// The part of the flat map that holds the home country.
 const BOARD = { x0: -130, x1: 130, z0: -88, z1: 88 };
-const SEA_FLOOR = -14;
+
+// Flat (x, z) -> unit vector from the planet centre. Map centre is +Z, map north (-z) is +Y.
+function flatToDir(x, z) {
+  const r = Math.hypot(x, z);
+  const s = r > 1e-9 ? Math.sin(r / PLANET_R) / r : 1 / PLANET_R;
+  return [x * s, -z * s, Math.cos(r / PLANET_R)];
+}
+function dirToFlat(a, b, c) {
+  const th = Math.acos(Math.max(-1, Math.min(1, c)));
+  const st = Math.sin(th);
+  if (st < 1e-9) return th < 1 ? [0, 0] : [0, Math.PI * PLANET_R];
+  const k = (th * PLANET_R) / st;
+  return [a * k, -b * k];
+}
+// How much the map is squeezed sideways at a point: 1 at the centre, ~0.55 at the far islands.
+function squeeze(x, z) {
+  const th = Math.hypot(x, z) / PLANET_R;
+  return th < 1e-6 ? 1 : Math.sin(th) / th;
+}
 
 // ---------------------------------------------------------------- noise
 
@@ -321,6 +345,16 @@ const BLOBS = [
   [108, -30, 14, 14],  // Palm Point
 ];
 
+// Lands on the far side of the planet are round caps measured on the sphere itself,
+// so the projection does not stretch them: [flat x, flat z, angular radius].
+const CAPS = [
+  { id: 'farland', at: [158, 70], r: 0.26 },
+  { id: 'westerland', at: [-160, 52], r: 0.21 },
+  { id: 'antipoda', at: [-150, 228], r: 0.12 },
+  { id: 'north-ice', at: [0, -Math.PI * PLANET_R / 2], r: 0.3, ice: true },
+  { id: 'south-ice', at: [0, Math.PI * PLANET_R / 2], r: 0.24, ice: true },
+].map((c) => ({ ...c, dir: flatToDir(...c.at) }));
+
 // > 0 on land, < 0 at sea. Roughly the fraction of the way in from the coast.
 function landness(x, z) {
   let f = -Infinity;
@@ -328,7 +362,20 @@ function landness(x, z) {
     const dx = (x - cx) / rx, dz = (z - cz) / rz;
     f = Math.max(f, 1 - (dx * dx + dz * dz));
   }
+  if (Math.hypot(x, z) > 110) {
+    const d = flatToDir(x, z);
+    for (const c of CAPS) {
+      const ang = Math.acos(Math.min(1, d[0] * c.dir[0] + d[1] * c.dir[1] + d[2] * c.dir[2])) / c.r;
+      f = Math.max(f, 1 - ang * ang);
+    }
+  }
   return f + fbm(x * 0.045, z * 0.045) * 0.14;
+}
+
+// True on the polar ice caps.
+function icy(x, z) {
+  const d = flatToDir(x, z);
+  return Math.abs(d[1]) > 0.93;
 }
 
 const MOUNTAINS = [
@@ -340,7 +387,7 @@ const MOUNTAINS = [
 
 function rawHeight(x, z) {
   const f = landness(x, z);
-  if (f <= 0) return SEA_FLOOR * smoothstep(0, 0.32, -f) - 0.6 * (1 - smoothstep(0, 0.32, -f));
+  if (f <= 0) return SEA_FLOOR * smoothstep(0, 0.5, -f) - 0.6 * (1 - smoothstep(0, 0.5, -f));
   let h = 0.4 + smoothstep(0, 0.25, f) * 2.2 + Math.max(0, fbm(x * 0.06 + 7, z * 0.06 - 3)) * 5;
   for (const [mx, mz, mh, s] of MOUNTAINS) {
     const d2 = ((x - mx) ** 2 + (z - mz) ** 2) / (s * s);
@@ -354,6 +401,7 @@ const STEP = 1.6;
 function heightAt(x, z) {
   const h = rawHeight(x, z);
   if (h <= 0.4) return h;
+  if (Math.hypot(x, z) > 140 && icy(x, z)) return 0.9;   // flat polar ice sheets
   const base = Math.floor(h / STEP) * STEP;
   return Math.max(0.4, base + STEP * smoothstep(0.7, 1, (h - base) / STEP));
 }
@@ -412,6 +460,8 @@ const CITIES = [
   { id: 'dunmore', name: 'Dunmore', x: 6, z: 2, r: 3, town: true },
   { id: 'palmtown', name: 'Palmtown', x: 104, z: -26, r: 3, town: true },
   { id: 'reefside', name: 'Reefside', x: 88, z: 26, r: 3, town: true },
+  { id: 'farland', name: 'Farland', x: 160, z: 72, r: 7, big: true, tall: 0.6, far: true },
+  { id: 'westerland', name: 'Westerland', x: -162, z: 52, r: 5, tall: 0.4, far: true },
 ];
 const CITY = Object.fromEntries(CITIES.map((c) => [c.id, c]));
 
@@ -450,8 +500,9 @@ const PLACED = [
   N('cls_isla_w', 'cls', 'Isla West Landing Station', 74, 8, ['submarine'], { role: 'Lands the Portsea cable' }),
   N('cls_isla_s', 'cls', 'Isla South Landing Station', 94, 31, ['submarine'], { role: 'Lands the Farland trans-ocean cable' }),
   N('cls_west', 'cls', 'Westmoor Landing Station', -106, 12, ['submarine'], { role: 'Lands the Westerland cable' }),
-  N('edge_far', 'edge', 'To Farland', 124, 84, ['submarine'], { role: 'Trans-ocean cable continues off the map' }),
-  N('edge_west', 'edge', 'To Westerland', -126, 60, ['submarine'], { role: 'Cable continues off the map' }),
+  N('cls_far', 'cls', 'Farland Landing Station', 0, 0, ['submarine'], { role: 'Lands both trans-ocean cables from Netlandia', coastOf: 'farland', toward: [60, 40] }),
+  N('cls_wester', 'cls', 'Westerland Landing Station', 0, 0, ['submarine'], { role: 'Lands the Westerland cable', coastOf: 'westerland', toward: [-106, 12] }),
+  N('dc_far', 'dc', 'Farland Cloud Region', 168, 66, ['dci'], { role: 'Overseas cloud region reached over the trans-ocean cables' }),
 ];
 
 // Routers float above the site that houses them.
@@ -504,9 +555,10 @@ const LINKS = [
 
   // submarine
   L('submarine', 'cls_port', 'cls_isla_w', { sea: true, via: [[50, 30], [62, 22]], name: 'Portsea – Isla Verde cable' }),
-  L('submarine', 'cls_isla_s', 'edge_far', { sea: true, via: [[100, 48], [114, 66]], name: 'Farland trans-ocean cable' }),
-  L('submarine', 'cls_west', 'edge_west', { sea: true, via: [[-116, 26], [-118, 44]], name: 'Westerland cable' }),
-  L('submarine', 'cls_port', 'edge_far', { sea: true, via: [[46, 50], [80, 74]], name: 'Portsea – Farland cable' }),
+  L('submarine', 'cls_isla_s', 'cls_far', { sea: true, via: [[100, 48], [118, 60]], name: 'Isla – Farland trans-ocean cable' }),
+  L('submarine', 'cls_west', 'cls_wester', { sea: true, via: [[-120, 22]], name: 'Westerland cable' }),
+  L('submarine', 'cls_port', 'cls_far', { sea: true, via: [[46, 50], [90, 80], [120, 84]], name: 'Portsea – Farland trans-ocean cable' }),
+  L('dci', 'dc_far', 'cls_far', { note: 'DCI waves from Capitalia and Portsea arrive here over the subsea cables' }),
 
   // MPLS (router to router)
   ...[
@@ -599,6 +651,7 @@ function samplePath(pts, step = 1) {
 
 function buildWorld() {
   const nodes = PLACED.map((n) => ({ ...n }));
+  for (const n of nodes) if (n.coastOf) Object.assign(n, coastPoint(CITY[n.coastOf], n.toward));
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
   const links = LINKS.map((l) => ({ ...l }));
 
@@ -686,6 +739,14 @@ function buildWorld() {
   }
 }
 
+// Last dry spot walking from a town toward a point at sea.
+function coastPoint(c, [tx, tz]) {
+  let x = c.x, z = c.z;
+  const len = Math.hypot(tx - x, tz - z), ux = (tx - x) / len, uz = (tz - z) / len;
+  while (heightAt(x + ux * 1.5, z + uz * 1.5) >= 0.6) { x += ux * 0.5; z += uz * 0.5; }
+  return { x, z };
+}
+
 function pointAt(pts, d) {
   for (let i = 1; i < pts.length; i++) {
     const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
@@ -713,7 +774,7 @@ function gearFor(n) {
   }
 }
 
-// Everything three.js: the diorama board, towns, equipment models, cables and traffic.
+// Everything three.js: the little planet, towns, equipment models, cables and traffic.
 
 const INK = new THREE.Color('#1d2a44');
 
@@ -785,84 +846,115 @@ function gable(w, h, d, color, y) {
   return outline(m, 0.07);
 }
 
-// ---------------------------------------------------------------- board
+// ---------------------------------------------------------------- planet
 
-function buildBoard(scene) {
-  const W = BOARD.x1 - BOARD.x0, D = BOARD.z1 - BOARD.z0;
-  const geo = new THREE.PlaneGeometry(W, D, W, D);
-  geo.rotateX(-Math.PI / 2);
+// Flat map point (x, z) at height y -> position on the planet.
+function sph(x, y, z, out = new THREE.Vector3()) {
+  const [a, b, c] = flatToDir(x, z);
+  return out.set(a, b, c).multiplyScalar(PLANET_R + y);
+}
+
+// Orientation that stands an object upright on the planet at (x, z), with its
+// local +x pointing map-east and +z map-south, as it would on the flat map.
+const _e = new THREE.Vector3(), _u = new THREE.Vector3(), _so = new THREE.Vector3(), _bm = new THREE.Matrix4();
+function frameAt(x, z, out = new THREE.Quaternion()) {
+  sph(x, 0, z, _u).normalize();
+  sph(x + 0.05, 0, z, _e).sub(sph(x - 0.05, 0, z, _so));
+  _so.crossVectors(_e, _u).normalize();
+  _e.crossVectors(_u, _so).normalize();
+  return out.setFromRotationMatrix(_bm.makeBasis(_e, _u, _so));
+}
+
+// Put an object on the planet where it would sit on the flat map.
+function place(obj, x, y, z, ry = 0) {
+  sph(x, y, z, obj.position);
+  frameAt(x, z, obj.quaternion);
+  if (ry) obj.rotateY(ry);
+  return obj;
+}
+
+function buildPlanet(scene) {
+  // Ground and sea floor in one closed, faceted sphere.
+  const geo = new THREE.IcosahedronGeometry(1, 110);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
   const c = new THREE.Color();
   const pal = {
     deep: new THREE.Color('#1c5fa8'), shelf: new THREE.Color('#5fd0e0'), sand: new THREE.Color('#f3dc9a'),
     grass: new THREE.Color('#8fd16a'), grass2: new THREE.Color('#6dbb55'), hill: new THREE.Color('#4f9d4a'),
-    rock: new THREE.Color('#a39283'), snow: new THREE.Color('#ffffff'),
+    rock: new THREE.Color('#a39283'), snow: new THREE.Color('#ffffff'), ice: new THREE.Color('#e3f4ff'),
   };
+  const v = new THREE.Vector3();
+  const cache = new Map();
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const edge = x <= BOARD.x0 + 0.01 || x >= BOARD.x1 - 0.01 || z <= BOARD.z0 + 0.01 || z >= BOARD.z1 - 0.01;
-    const h = edge ? SEA_FLOOR : heightAt(x, z);
-    pos.setY(i, h);
-    if (h < 0) c.copy(pal.deep).lerp(pal.shelf, smoothstep(SEA_FLOOR, -1, h));
-    else if (h < 0.9 && landness(x, z) < 0.12) c.copy(pal.sand);
-    else if (h > 13) c.copy(pal.snow);
-    else if (h > 8) c.copy(pal.rock);
-    else if (h > 4.5) c.copy(pal.hill);
-    else c.copy(((Math.sin(x * 0.3) + Math.cos(z * 0.27)) > 0.4) ? pal.grass2 : pal.grass);
-    col.set([c.r, c.g, c.b], i * 3);
+    v.fromBufferAttribute(pos, i).normalize();
+    const key = `${v.x.toFixed(5)},${v.y.toFixed(5)},${v.z.toFixed(5)}`;
+    let hit = cache.get(key);
+    if (!hit) {
+      const [x, z] = dirToFlat(v.x, v.y, v.z);
+      const h = heightAt(x, z);
+      if (h < 0) c.copy(pal.deep).lerp(pal.shelf, smoothstep(SEA_FLOOR, -1, h));
+      else if (icy(x, z)) c.copy(pal.ice);
+      else if (h < 0.9 && landness(x, z) < 0.12) c.copy(pal.sand);
+      else if (h > 13) c.copy(pal.snow);
+      else if (h > 8) c.copy(pal.rock);
+      else if (h > 4.5) c.copy(pal.hill);
+      else c.copy(((Math.sin(x * 0.3) + Math.cos(z * 0.27)) > 0.4) ? pal.grass2 : pal.grass);
+      hit = [h, c.r, c.g, c.b];
+      cache.set(key, hit);
+    }
+    v.multiplyScalar(PLANET_R + hit[0]);
+    pos.setXYZ(i, v.x, v.y, v.z);
+    col.set([hit[1], hit[2], hit[3]], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const flatGeo = flat(geo);
-  const terrain = new THREE.Mesh(flatGeo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient }));
+  geo.computeVertexNormals();
+  const terrain = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient }));
   terrain.receiveShadow = true;
   terrain.name = 'terrain';
   scene.add(terrain);
 
-  // Diorama base: soil, then a darker stratum.
-  const base = new THREE.Group();
-  const soil = box(W, 3, D, '#b9845a', 0, SEA_FLOOR - 3.4, 0, 0);   // top sits just under the sea floor
-  const rock = box(W, 2.5, D, '#7d5a43', 0, SEA_FLOOR - 5.9, 0, 0);
-  base.add(soil, rock);
-  scene.add(base);
-
-  // Water: a translucent slab so the sea floor and its cables show through.
+  // Sea: a translucent shell so the sea floor and its cables show through.
   const waterMat = new THREE.MeshToonMaterial({ color: '#36b5e8', gradientMap: gradient, transparent: true, opacity: 0.55, depthWrite: false });
-  const top = new THREE.Mesh(new THREE.PlaneGeometry(W, D, 1, 1), waterMat);
-  top.rotateX(-Math.PI / 2);
-  top.position.y = 0;
-  top.renderOrder = 2;
-  scene.add(top);
-  const sideMat = new THREE.MeshBasicMaterial({ color: '#2a8fc4', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
-  const H = -SEA_FLOOR;
-  for (const [w, x, z, ry] of [[W, 0, BOARD.z1, 0], [W, 0, BOARD.z0, 0], [D, BOARD.x1, 0, Math.PI / 2], [D, BOARD.x0, 0, Math.PI / 2]]) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(w, H), sideMat);
-    s.position.set(x, -H / 2, z);
-    s.rotation.y = ry;
-    s.renderOrder = 3;
-    scene.add(s);
-  }
+  const water = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 160, 120), waterMat);
+  water.renderOrder = 2;
+  scene.add(water);
 
-  // Foam: a white ring where land meets water, sampled on a grid.
+  // Atmosphere: a soft rim of light around the planet.
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R * 1.16, 64, 48), new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { color: { value: new THREE.Color('#9fe3ff') } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 color; varying vec3 vN; varying vec3 vV;
+      void main() { float k = clamp(-dot(vN, vV), 0.0, 1.0); gl_FragColor = vec4(color, k * k * 1.7); }`,
+  }));
+  glow.raycast = () => {};
+  scene.add(glow);
+
+  // Foam: white dabs where land meets water.
   const foam = [];
-  for (let x = BOARD.x0 + 2; x < BOARD.x1 - 2; x += 1.6) {
-    for (let z = BOARD.z0 + 2; z < BOARD.z1 - 2; z += 1.6) {
+  for (let x = -200; x < 200; x += 1.6) {
+    for (let z = -170; z < 240; z += 1.6) {
+      if (Math.hypot(x, z) > 290) continue;
       const h = heightAt(x, z);
-      if (h < 0 && h > -0.9 && landness(x, z) > -0.04) foam.push([x, z]);
+      if (h < 0 && h > -0.9 && landness(x, z) > -0.04 && Math.random() < squeeze(x, z) + 0.1) foam.push([x, z]);
     }
   }
   const foamMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(0.9, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false }), foam.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
-  foam.forEach(([x, z], i) => foamMesh.setMatrixAt(i, m4.compose(new THREE.Vector3(x, 0.03, z), q, new THREE.Vector3(1, 1, 1))));
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qx = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  const one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+  foam.forEach(([x, z], i) => foamMesh.setMatrixAt(i, m4.compose(sph(x, 0.04, z, p), frameAt(x, z, q).multiply(qx), one)));
   foamMesh.renderOrder = 4;
+  foamMesh.raycast = () => {};
   scene.add(foamMesh);
 
-  return { terrain, water: top, waterMat, foamMesh };
+  return { terrain, water, waterMat, foamMesh };
 }
 
 // ---------------------------------------------------------------- instanced helpers
 
-const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _qy = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color();
 
 // items: {x, y, z, sx, sy, sz, color, ry}
 function instanced(geo, items, { line = 0.1, shadow = true, faceted = false } = {}) {
@@ -875,8 +967,8 @@ function instanced(geo, items, { line = 0.1, shadow = true, faceted = false } = 
   const size = new THREE.Vector3();
   geo.boundingBox.getSize(size);
   items.forEach((it, i) => {
-    _p.set(it.x, it.y, it.z);
-    _q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0);
+    sph(it.x, it.y, it.z, _p);
+    frameAt(it.x, it.z, _q).multiply(_qy.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0));
     _s.set(it.sx, it.sy, it.sz);
     body.setMatrixAt(i, _m.compose(_p, _q, _s));
     body.setColorAt(i, _c.set(it.color));
@@ -925,11 +1017,12 @@ const ROOF_COLORS = ['#e76f51', '#c0504d', '#6d597a', '#457b9d', '#e9a03b'];
 
 function buildTowns(world) {
   const segs = cableSegments(world);
-  const ground = world.nodes.filter((n) => !['router', 'repeater', 'edge'].includes(n.type));
+  const ground = world.nodes.filter((n) => !['router', 'repeater'].includes(n.type));
   const r = rand(11);
   const towers = [], roofs = [], caps = [];
   for (const c of world.cities) {
-    const step = c.town ? 1.9 : 2.3;
+    // the far side of the planet squeezes the map sideways, so space lots out there
+    const step = (c.town ? 1.9 : 2.3) / squeeze(c.x, c.z);
     for (let x = c.x - c.r; x <= c.x + c.r; x += step) {
       for (let z = c.z - c.r; z <= c.z + c.r; z += step) {
         const d = Math.hypot(x - c.x, z - c.z) / c.r;
@@ -957,14 +1050,15 @@ function buildTowns(world) {
 
 function buildTrees(world) {
   const segs = cableSegments(world);
-  const ground = world.nodes.filter((n) => !['router', 'repeater', 'edge'].includes(n.type));
+  const ground = world.nodes.filter((n) => !['router', 'repeater'].includes(n.type));
   const r = rand(5);
   const pines = [], rounds = [], trunks = [];
-  for (let x = BOARD.x0; x < BOARD.x1; x += 1.7) {
-    for (let z = BOARD.z0; z < BOARD.z1; z += 1.7) {
+  for (let x = -200; x < 200; x += 1.7) {
+    for (let z = -170; z < 240; z += 1.7) {
       const jx = x + (r() - 0.5) * 1.4, jz = z + (r() - 0.5) * 1.4;
+      if (Math.hypot(jx, jz) > 290) continue;
       const h = heightAt(jx, jz);
-      if (h < 1 || h > 12.5) continue;
+      if (h < 1 || h > 12.5 || icy(jx, jz) || r() > squeeze(jx, jz)) continue;
       const forest = Math.sin(jx * 0.11 + 1.3) * Math.cos(jz * 0.13) + Math.sin(jx * 0.05 - jz * 0.07);
       if (forest < 0.55 || r() < 0.35) continue;
       if (world.cities.some((c) => Math.hypot(c.x - jx, c.z - jz) < c.r + 2.5)) continue;
@@ -997,8 +1091,7 @@ function buildLife(scene) {
     scene.add(b);
     movers.push((t) => {
       const a = t * sp;
-      b.position.set(cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r);
-      b.rotation.y = -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2);
+      place(b, cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r, -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2));
     });
   }
 
@@ -1006,10 +1099,8 @@ function buildLife(scene) {
   const ship = new THREE.Group();
   ship.add(box(5, 0.9, 1.8, '#f1faee', 0, -0.3, 0, 0.08), box(1.6, 1.2, 1.4, '#ffc300', 1.2, 0.6, 0, 0.07),
     cyl(0.12, 0.12, 2.2, '#1d2a44', -1.4, 0.6, 0, 6, 0), box(0.2, 0.2, 1.8, '#1d2a44', -1.9, 2.6, 0, 0));
-  ship.position.set(56, 0, 30);
-  ship.rotation.y = 0.5;
   scene.add(ship);
-  movers.push((t) => { ship.position.y = Math.sin(t * 1.6) * 0.1; ship.rotation.z = Math.sin(t * 1.3) * 0.03; });
+  movers.push((t) => { place(ship, 56, Math.sin(t * 1.6) * 0.1, 30, 0.5); ship.rotateX(Math.sin(t * 1.3) * 0.03); });
 
   // Wind farm on the moor.
   for (const [x, z] of [[-100, -6], [-104, 0], [-97, -12], [-108, -10]]) {
@@ -1027,8 +1118,7 @@ function buildLife(scene) {
     }
     rotor.add(ball(0.3, '#e63946', 0, 0, 0, 0.04));
     t.add(rotor);
-    t.position.set(x, y, z);
-    t.rotation.y = 0.4;
+    place(t, x, y, z, 0.4);
     scene.add(t);
     movers.push((tt) => { rotor.rotation.z = -tt * 1.4 + x; });
   }
@@ -1037,7 +1127,8 @@ function buildLife(scene) {
   const clouds = new THREE.Group();
   const cr = rand(3);
   const cloudMat = toon('#ffffff', { transparent: true, opacity: 0.92 });
-  for (let i = 0; i < 7; i++) {
+  const Y = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 16; i++) {
     const c = new THREE.Group();
     for (let k = 0; k < 5; k++) {
       const m = new THREE.Mesh(flat(new THREE.IcosahedronGeometry(2.4 + cr() * 2, 1)), cloudMat);
@@ -1045,17 +1136,14 @@ function buildLife(scene) {
       m.castShadow = true;
       c.add(m);
     }
-    c.position.set(BOARD.x0 + cr() * (BOARD.x1 - BOARD.x0), 34 + cr() * 8, BOARD.z0 + cr() * (BOARD.z1 - BOARD.z0));
-    c.userData.speed = 1.2 + cr() * 1.5;
+    // anywhere between the polar circles, floating above the hills
+    const dir = new THREE.Vector3().setFromSphericalCoords(1, 0.5 + cr() * (Math.PI - 1), cr() * Math.PI * 2);
+    c.position.copy(dir).multiplyScalar(PLANET_R + 19 + cr() * 4);
+    c.quaternion.setFromUnitVectors(Y, dir);
     clouds.add(c);
   }
   scene.add(clouds);
-  movers.push((t, dt) => {
-    for (const c of clouds.children) {
-      c.position.x += c.userData.speed * dt;
-      if (c.position.x > BOARD.x1 + 15) c.position.x = BOARD.x0 - 15;
-    }
-  });
+  movers.push((t, dt) => { clouds.rotation.y += dt * 0.012; });
   return { movers, clouds };
 }
 
@@ -1125,13 +1213,6 @@ function modelFor(n, layerColor) {
       r.rotation.z = Math.PI / 2;
       r.position.y = 0.5;
       g.add(r);
-      break;
-    }
-    case 'edge': {
-      g.add(cyl(0.7, 0.9, 1.2, layerColor, 0, -0.4, 0, 10));
-      g.add(cyl(0.72, 0.72, 0.3, '#1d2a44', 0, 0.2, 0, 10, 0));
-      g.add(cyl(0.06, 0.06, 2.4, '#1d2a44', 0, 0.8, 0, 6, 0));
-      g.add(box(1.2, 0.7, 0.05, '#e63946', 0.62, 2.4, 0, 0.03));
       break;
     }
     case 'router': {
@@ -1220,7 +1301,6 @@ function modelFor(n, layerColor) {
 // Height a node's model stands at.
 function nodeY(world, n) {
   if (n.type === 'router') return Math.max(0, heightAt(n.x, n.z)) + (n.tier === 'core' ? 12 : 8.5);
-  if (n.type === 'edge') return 0;
   if (n.type === 'repeater') return heightAt(n.x, n.z);
   return Math.max(0.4, heightAt(n.x, n.z));
 }
@@ -1250,21 +1330,25 @@ const dash = (() => {
 // A cable's centre line as a three.js curve.
 function linkCurve(world, l, nodeYs) {
   if (l.layer === 'mpls') {
+    // an arc over the planet: straight on the map, raised in the middle
     const a = world.byId[l.a], b = world.byId[l.b];
-    const A = new THREE.Vector3(a.x, nodeYs[a.id], a.z), B = new THREE.Vector3(b.x, nodeYs[b.id], b.z);
-    const len = A.distanceTo(B);
-    const mid = A.clone().add(B).multiplyScalar(0.5);
-    mid.y = Math.max(A.y, B.y) + 3 + len * 0.16;
-    return { curve: new THREE.QuadraticBezierCurve3(A, mid, B), len };
+    const ya = nodeYs[a.id], yb = nodeYs[b.id];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const ym = Math.max(ya, yb) + 3 + len * 0.16;
+    const pts = [];
+    for (let i = 0, n = Math.max(12, Math.ceil(len / 2)); i <= n; i++) {
+      const t = i / n;
+      const y = (1 - t) * (1 - t) * ya + 2 * t * (1 - t) * ym + t * t * yb;
+      pts.push(sph(a.x + (b.x - a.x) * t, y, a.z + (b.z - a.z) * t));
+    }
+    return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len };
   }
   const path = linkPath(world, l);
   const pts = samplePath(path, 1.4).map(([x, z]) => {
     const h = groundY(x, z);
     const y = h < 0 ? heightAt(x, z) + LIFT.submarine : h + LIFT[l.layer];
-    return new THREE.Vector3(x, y, z);
+    return sph(x, y, z);
   });
-  // Off-map buoys float: rise from the floor to the surface at the very end.
-  if (world.byId[l.b].type === 'edge') pts[pts.length - 1].y = -0.4;
   return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len: pathLength(path) };
 }
 
@@ -1319,41 +1403,65 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(38, 1, 1, 2000);
-// Start framed on the whole board, nudged so the layer panel doesn't cover the west coast.
-const HOME = { pos: new THREE.Vector3(-26, 250, 178), target: new THREE.Vector3(-26, 0, 10) };
-camera.position.copy(HOME.pos);
+const R = PLANET_R;
+const UP = new THREE.Vector3(0, 1, 0);
 
-const controls = new OrbitControls(camera, canvas);
-controls.target.copy(HOME.target);
+// OrbitControls spins a stand-in camera around the planet's centre; the real camera
+// is then set from it each frame: straight down at the planet when far away, tilting
+// toward the horizon as it comes in close, the way a little-planet game frames it.
+const rig = new THREE.PerspectiveCamera(38, 1, 1, 3000);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3000);
+const dirOf = (x, z) => new THREE.Vector3(...flatToDir(x, z));
+// Open over the home country, a little west so the layer panel doesn't hide Westmoor.
+const HOME = { dir: dirOf(-14, 10), dist: R + 250 };
+rig.position.copy(HOME.dir).multiplyScalar(HOME.dist);
+
+const controls = new OrbitControls(rig, canvas);
+controls.target.set(0, 0, 0);
+controls.enablePan = false;
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.screenSpacePanning = false;          // pan across the ground, like a map
-controls.minPolarAngle = 0.08;
-controls.maxPolarAngle = 1.0;                 // never drop below a bird's-eye tilt
-controls.minDistance = 28;
-controls.maxDistance = 330;
-controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
-controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
-controls.addEventListener('change', () => {
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, BOARD.x0, BOARD.x1);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, BOARD.z0, BOARD.z1);
-  controls.target.y = 0;
-});
+controls.minPolarAngle = 0.25;
+controls.maxPolarAngle = Math.PI - 0.25;
+controls.minDistance = R + 26;
+controls.maxDistance = R * 4.5;
+controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
-scene.add(new THREE.HemisphereLight('#ffffff', '#7d8fa3', 1.6));
+const _d = new THREE.Vector3(), _n = new THREE.Vector3(), _f = new THREE.Vector3();
+function aimCamera() {
+  const dist = rig.position.length();
+  const h = dist - R;
+  _d.copy(rig.position).normalize();
+  _n.copy(UP).addScaledVector(_d, -_d.y);                        // map north at this spot
+  if (_n.lengthSq() < 1e-6) _n.set(0, 0, -1);
+  _n.normalize();
+  const tilt = 0.72 * (1 - THREE.MathUtils.smoothstep(h, 45, 190));
+  _f.copy(_d).multiplyScalar(R);                                  // the spot under the camera
+  camera.position.copy(_f).addScaledVector(_d, h * Math.cos(tilt)).addScaledVector(_n, -h * Math.sin(tilt));
+  camera.up.copy(_n).multiplyScalar(Math.cos(tilt)).addScaledVector(_d, Math.sin(tilt));
+  camera.lookAt(_f.addScaledVector(_n, h * 0.12 * Math.sin(tilt)));
+  // drag moves the ground under the pointer at about the same rate at any zoom
+  controls.rotateSpeed = THREE.MathUtils.clamp(h / (R * 1.9), 0.1, 1);
+  // keep the sun and sky light over whatever is in view, so it's always daytime
+  sun.position.copy(_d).multiplyScalar(300).addScaledVector(_n, 120).addScaledVector(_side.crossVectors(_n, _d), -140);
+  hemi.position.copy(_d);
+}
+const _side = new THREE.Vector3();
+
+const hemi = new THREE.HemisphereLight('#ffffff', '#7d8fa3', 1.6);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff4e0', 2.4);
-sun.position.set(-90, 160, 70);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 110, bottom: -110, near: 10, far: 450 });
+Object.assign(sun.shadow.camera, { left: -R * 1.25, right: R * 1.25, top: R * 1.25, bottom: -R * 1.25, near: 100, far: 500 });
 sun.shadow.bias = -0.001;
 sun.shadow.normalBias = 0.4;
-scene.add(sun);
+scene.add(sun, sun.target);
 
 // ---------------------------------------------------------------- world
 
-const board = buildBoard(scene);
+const board = buildPlanet(scene);
 scene.add(buildTowns(world), buildTrees(world));
 const life = buildLife(scene);
 
@@ -1370,7 +1478,7 @@ const blinkers = [], puffs = [];
 for (const n of world.nodes) {
   const home = n.layers[0];
   const g = modelFor(n, LAYER[home].color);
-  g.position.set(n.x, nodeYs[n.id], n.z);
+  place(g, n.x, nodeYs[n.id], n.z);
   g.userData.node = n;
   g.traverse((o) => {
     o.userData.nodeId = n.id;
@@ -1428,10 +1536,12 @@ function movePackets(t) {
 }
 
 // Selection ring.
-const ring = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-ring.rotation.x = -Math.PI / 2;
+const ring = new THREE.Group();
+const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+ringMesh.rotation.x = -Math.PI / 2;
+ringMesh.raycast = () => {};
+ring.add(ringMesh);
 ring.visible = false;
-ring.raycast = () => {};
 scene.add(ring);
 
 // ---------------------------------------------------------------- layer state
@@ -1465,46 +1575,45 @@ function emphasise() {
 // ---------------------------------------------------------------- camera moves
 
 let flight = null;
-function flyTo(target, distance, polar = 0.62, azimuth = null, ms = 1300) {
-  const from = { pos: camera.position.clone(), target: controls.target.clone() };
-  const off = camera.position.clone().sub(controls.target);
-  const sph = new THREE.Spherical().setFromVector3(off);
-  sph.radius = distance;
-  sph.phi = polar;
-  if (azimuth !== null) sph.theta = azimuth;
-  const to = { target: target.clone().setY(0) };
-  to.pos = to.target.clone().add(new THREE.Vector3().setFromSpherical(sph));
-  flight = { from, to, t0: performance.now(), ms: reduceMotion ? 1 : ms };
+// Spin the planet to bring `dir` under the camera, ending `h` above the ground.
+function flyToDir(dir, h, ms = 1400) {
+  const from = rig.position.clone().normalize();
+  const turn = new THREE.Quaternion().setFromUnitVectors(from, dir.clone().normalize());
+  flight = { from, turn, d0: rig.position.length(), d1: R + h, t0: performance.now(), ms: reduceMotion ? 1 : ms };
 }
+const flyTo = (x, z, h, ms) => flyToDir(dirOf(x, z), h, ms);
+const _fq = new THREE.Quaternion();
 function stepFlight(now) {
   if (!flight) return;
   const k = Math.min(1, (now - flight.t0) / flight.ms);
   const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-  camera.position.lerpVectors(flight.from.pos, flight.to.pos, e);
-  controls.target.lerpVectors(flight.from.target, flight.to.target, e);
+  _fq.identity().slerp(flight.turn, e);
+  rig.position.copy(flight.from).applyQuaternion(_fq).multiplyScalar(THREE.MathUtils.lerp(flight.d0, flight.d1, e));
   if (k >= 1) flight = null;
 }
+const height = () => rig.position.length() - R;
 
-function frameNodes(ids, polar = 0.6) {
-  const box = new THREE.Box3();
-  for (const id of ids) { const n = world.byId[id]; box.expandByPoint(new THREE.Vector3(n.x, 0, n.z)); }
-  const c = box.getCenter(new THREE.Vector3());
-  const s = box.getSize(new THREE.Vector3());
-  const fit = Math.max(s.x / camera.aspect, s.z * 1.35, 30);
-  flyTo(c, THREE.MathUtils.clamp(fit * 1.25, 45, 320), polar, 0);
+// Frame a set of nodes: aim at their middle on the sphere, back off to fit the widest.
+function frameNodes(ids) {
+  const mid = new THREE.Vector3();
+  const dirs = ids.map((id) => dirOf(world.byId[id].x, world.byId[id].z));
+  for (const d of dirs) mid.add(d);
+  mid.normalize();
+  const spread = Math.max(...dirs.map((d) => d.angleTo(mid))) * R;
+  flyToDir(mid, THREE.MathUtils.clamp(spread * 2.2 / Math.min(1, camera.aspect), 45, R * 2.6));
 }
 
 function focusLayer(id) {
   for (const l of LAYERS) shown[l.id] = l.id === id;
   applyLayers();
   const ids = world.nodes.filter((n) => n.layers.includes(id)).map((n) => n.id);
-  frameNodes(ids, id === 'mpls' ? 0.85 : 0.6);
+  frameNodes(ids);
   showCaption(LAYER[id]);
 }
 function showAll() {
   for (const l of LAYERS) shown[l.id] = true;
   applyLayers();
-  flyTo(HOME.target, HOME.pos.distanceTo(HOME.target), new THREE.Spherical().setFromVector3(HOME.pos.clone().sub(HOME.target)).phi, 0);
+  flyToDir(HOME.dir, HOME.dist - R);
   showCaption(null);
 }
 
@@ -1586,9 +1695,9 @@ function select(id) {
   if (!id) { card.hidden = true; return; }
   const n = world.byId[id];
   const layer = LAYER[n.layers[0]];
-  ring.position.set(n.x, nodeYs[id] + (n.type === 'router' ? -0.6 : 0.25), n.z);
+  place(ring, n.x, nodeYs[id] + (n.type === 'router' ? -0.6 : 0.25), n.z);
   ring.scale.setScalar(n.type === 'dc' ? 2 : n.type === 'router' ? 0.7 : n.type === 'ila' || n.type === 'repeater' ? 0.5 : 1);
-  ring.material.color.set(layer.color);
+  ringMesh.material.color.set(layer.color);
   card.style.setProperty('--c', layer.color);
   const neighbours = [...new Set(n.links.map((lid) => {
     const l = world.links.find((x) => x.id === lid);
@@ -1614,7 +1723,7 @@ card.addEventListener('click', (e) => {
     const lay = n.layers.find((x) => !shown[x]);
     if (lay && !n.layers.some((x) => shown[x])) { shown[lay] = true; applyLayers(); }
     select(n.id);
-    flyTo(new THREE.Vector3(n.x, 0, n.z), Math.min(camera.position.distanceTo(controls.target), 110), 0.6);
+    flyTo(n.x, n.z, Math.min(height(), 110));
   }
 });
 $('#card-close').addEventListener('click', () => select(null));
@@ -1628,29 +1737,31 @@ for (const c of world.cities) {
   el.className = 'lbl city' + (c.town ? ' town' : '') + (c.big ? ' big' : '');
   el.textContent = c.name;
   labelLayer.append(el);
-  labels.push({ el, pos: new THREE.Vector3(c.x, Math.max(0, heightAt(c.x, c.z)) + (c.town ? 4 : 9), c.z), town: c.town });
+  labels.push({ el, pos: sph(c.x, Math.max(0, heightAt(c.x, c.z)) + (c.town ? 4 : 9), c.z), town: c.town });
 }
-for (const n of world.nodes.filter((x) => x.type === 'edge' || x.type === 'dc')) {
+for (const n of world.nodes.filter((x) => x.type === 'dc' || (x.type === 'cls' && x.id.endsWith('far')))) {
   const el = document.createElement('div');
   el.className = 'lbl tag';
   el.style.setProperty('--c', LAYER[n.layers[0]].color);
-  el.textContent = n.type === 'edge' ? n.name + ' →' : n.name;
+  el.textContent = n.name;
   labelLayer.append(el);
-  labels.push({ el, pos: new THREE.Vector3(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z), node: n.id, tag: true });
+  labels.push({ el, pos: sph(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z), node: n.id, tag: true });
 }
 const tip = document.createElement('div');
 tip.className = 'lbl tip';
 tip.hidden = true;
 labelLayer.append(tip);
 
-const _lp = new THREE.Vector3();
+const _lp = new THREE.Vector3(), _fv = new THREE.Vector3();
+// On the side of the planet facing the camera (not over the horizon).
+const facing = (p) => _fv.copy(camera.position).sub(p).dot(p) > 0;
 function placeLabels() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  const dist = camera.position.distanceTo(controls.target);
+  const hh = height();
   for (const L of labels) {
-    let vis = opts.labels;
-    if (L.town) vis &&= dist < 200;
-    if (L.tag) vis &&= dist < 230 && nodeObjs[L.node].visible;
+    let vis = opts.labels && facing(L.pos);
+    if (L.town) vis &&= hh < 150;
+    if (L.tag) vis &&= hh < 140 && nodeObjs[L.node].visible;
     if (vis) {
       _lp.copy(L.pos).project(camera);
       vis = _lp.z < 1 && Math.abs(_lp.x) < 1.1 && Math.abs(_lp.y) < 1.1;
@@ -1671,7 +1782,7 @@ function pick(ev) {
   for (const hit of ray.intersectObjects(pickables, true)) {
     let o = hit.object, ok = true;
     for (; o; o = o.parent) if (!o.visible) { ok = false; break; }
-    if (ok && hit.object.userData.nodeId) return hit.object.userData.nodeId;
+    if (ok && hit.object.userData.nodeId && facing(nodeObjs[hit.object.userData.nodeId].position)) return hit.object.userData.nodeId;
   }
   return null;
 }
@@ -1686,8 +1797,7 @@ canvas.addEventListener('pointerup', (ev) => {
   select(id);
   if (id) {
     const n = world.byId[id];
-    const d = camera.position.distanceTo(controls.target);
-    if (d > 140) flyTo(new THREE.Vector3(n.x, 0, n.z), 110, 0.6);
+    if (height() > 140) flyTo(n.x, n.z, 110);
   }
 });
 function hover() {
@@ -1747,8 +1857,9 @@ function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
+    camera.aspect = rig.aspect = w / h;
     camera.updateProjectionMatrix();
+    rig.updateProjectionMatrix();
   }
 }
 
@@ -1760,13 +1871,14 @@ function frame(now) {
   resize();
   stepFlight(now);
   controls.update();
+  aimCamera();
   for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
   movePackets(t);
   for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
   for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;
   for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
-  ring.rotation.z = t;
-  ring.position.y += Math.sin(t * 3) * 0.004;
+  ringMesh.rotation.z = t;
+  ringMesh.position.y = Math.sin(t * 3) * 0.3;
   hover();
   placeLabels();
   renderer.render(scene, camera);
@@ -1774,6 +1886,6 @@ function frame(now) {
 }
 applyLayers();
 requestAnimationFrame(frame);
-window.netlandia = { world, select, focusLayer, showAll, camera, controls };
+window.netlandia = { world, select, focusLayer, showAll, flyTo, camera, controls };
 
 </script>

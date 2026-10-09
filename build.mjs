@@ -1,6 +1,8 @@
 // Bundle the map into one self-contained HTML page (three.js from jsDelivr).
 //   node build.mjs  ->  dist/netlandia.html
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +21,18 @@ const modules = ['js/world.js', 'js/scene.js', 'js/main.js'].map((p) => read(p)
   .replace(/^export (const|function|let)/gm, '$1'));
 const threeImports = new Set();
 const body = modules.map((m) => m.replace(/^import .* from 'three(\/addons\/[^']+)?';\n/gm, (line) => { threeImports.add(line.trim()); return ''; }));
+
+// The modules now share one scope, so two top-level names that collide would only
+// fail in the browser. Parse the joined script here and stop the build instead.
+const joined = [...threeImports].join('\n') + '\n' + body.join('\n');
+const probe = join(mkdtempSync(join(tmpdir(), 'netlandia-')), 'bundle.mjs');
+writeFileSync(probe, joined);
+try {
+  execFileSync(process.execPath, ['--check', probe], { stdio: 'pipe' });
+} catch (e) {
+  console.error('Bundled script does not parse (a top-level name used in two modules?):\n' + e.stderr);
+  process.exit(1);
+}
 
 const html = read('index.html');
 const hud = html.slice(html.indexOf('<!--HUD-->'), html.indexOf('<!--/HUD-->') + '<!--/HUD-->'.length);

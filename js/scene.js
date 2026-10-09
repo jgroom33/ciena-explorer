@@ -1,7 +1,8 @@
-// Everything three.js: the diorama board, towns, equipment models, cables and traffic.
+// Everything three.js: the little planet, towns, equipment models, cables and traffic.
 import * as THREE from 'three';
 import {
-  BOARD, SEA_FLOOR, heightAt, landness, smoothstep, linkPath, samplePath, pathLength, distToSegment,
+  SEA_FLOOR, PLANET_R, heightAt, landness, icy, smoothstep, linkPath, samplePath, pathLength, distToSegment,
+  flatToDir, dirToFlat, squeeze, CAPS,
 } from './world.js';
 
 export const INK = new THREE.Color('#1d2a44');
@@ -74,84 +75,115 @@ function gable(w, h, d, color, y) {
   return outline(m, 0.07);
 }
 
-// ---------------------------------------------------------------- board
+// ---------------------------------------------------------------- planet
 
-export function buildBoard(scene) {
-  const W = BOARD.x1 - BOARD.x0, D = BOARD.z1 - BOARD.z0;
-  const geo = new THREE.PlaneGeometry(W, D, W, D);
-  geo.rotateX(-Math.PI / 2);
+// Flat map point (x, z) at height y -> position on the planet.
+export function sph(x, y, z, out = new THREE.Vector3()) {
+  const [a, b, c] = flatToDir(x, z);
+  return out.set(a, b, c).multiplyScalar(PLANET_R + y);
+}
+
+// Orientation that stands an object upright on the planet at (x, z), with its
+// local +x pointing map-east and +z map-south, as it would on the flat map.
+const _e = new THREE.Vector3(), _u = new THREE.Vector3(), _so = new THREE.Vector3(), _bm = new THREE.Matrix4();
+export function frameAt(x, z, out = new THREE.Quaternion()) {
+  sph(x, 0, z, _u).normalize();
+  sph(x + 0.05, 0, z, _e).sub(sph(x - 0.05, 0, z, _so));
+  _so.crossVectors(_e, _u).normalize();
+  _e.crossVectors(_u, _so).normalize();
+  return out.setFromRotationMatrix(_bm.makeBasis(_e, _u, _so));
+}
+
+// Put an object on the planet where it would sit on the flat map.
+export function place(obj, x, y, z, ry = 0) {
+  sph(x, y, z, obj.position);
+  frameAt(x, z, obj.quaternion);
+  if (ry) obj.rotateY(ry);
+  return obj;
+}
+
+export function buildPlanet(scene) {
+  // Ground and sea floor in one closed, faceted sphere.
+  const geo = new THREE.IcosahedronGeometry(1, 110);
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
   const c = new THREE.Color();
   const pal = {
     deep: new THREE.Color('#1c5fa8'), shelf: new THREE.Color('#5fd0e0'), sand: new THREE.Color('#f3dc9a'),
     grass: new THREE.Color('#8fd16a'), grass2: new THREE.Color('#6dbb55'), hill: new THREE.Color('#4f9d4a'),
-    rock: new THREE.Color('#a39283'), snow: new THREE.Color('#ffffff'),
+    rock: new THREE.Color('#a39283'), snow: new THREE.Color('#ffffff'), ice: new THREE.Color('#e3f4ff'),
   };
+  const v = new THREE.Vector3();
+  const cache = new Map();
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const edge = x <= BOARD.x0 + 0.01 || x >= BOARD.x1 - 0.01 || z <= BOARD.z0 + 0.01 || z >= BOARD.z1 - 0.01;
-    const h = edge ? SEA_FLOOR : heightAt(x, z);
-    pos.setY(i, h);
-    if (h < 0) c.copy(pal.deep).lerp(pal.shelf, smoothstep(SEA_FLOOR, -1, h));
-    else if (h < 0.9 && landness(x, z) < 0.12) c.copy(pal.sand);
-    else if (h > 13) c.copy(pal.snow);
-    else if (h > 8) c.copy(pal.rock);
-    else if (h > 4.5) c.copy(pal.hill);
-    else c.copy(((Math.sin(x * 0.3) + Math.cos(z * 0.27)) > 0.4) ? pal.grass2 : pal.grass);
-    col.set([c.r, c.g, c.b], i * 3);
+    v.fromBufferAttribute(pos, i).normalize();
+    const key = `${v.x.toFixed(5)},${v.y.toFixed(5)},${v.z.toFixed(5)}`;
+    let hit = cache.get(key);
+    if (!hit) {
+      const [x, z] = dirToFlat(v.x, v.y, v.z);
+      const h = heightAt(x, z);
+      if (h < 0) c.copy(pal.deep).lerp(pal.shelf, smoothstep(SEA_FLOOR, -1, h));
+      else if (icy(x, z)) c.copy(pal.ice);
+      else if (h < 0.9 && landness(x, z) < 0.12) c.copy(pal.sand);
+      else if (h > 13) c.copy(pal.snow);
+      else if (h > 8) c.copy(pal.rock);
+      else if (h > 4.5) c.copy(pal.hill);
+      else c.copy(((Math.sin(x * 0.3) + Math.cos(z * 0.27)) > 0.4) ? pal.grass2 : pal.grass);
+      hit = [h, c.r, c.g, c.b];
+      cache.set(key, hit);
+    }
+    v.multiplyScalar(PLANET_R + hit[0]);
+    pos.setXYZ(i, v.x, v.y, v.z);
+    col.set([hit[1], hit[2], hit[3]], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const flatGeo = flat(geo);
-  const terrain = new THREE.Mesh(flatGeo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient }));
+  geo.computeVertexNormals();
+  const terrain = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradient }));
   terrain.receiveShadow = true;
   terrain.name = 'terrain';
   scene.add(terrain);
 
-  // Diorama base: soil, then a darker stratum.
-  const base = new THREE.Group();
-  const soil = box(W, 3, D, '#b9845a', 0, SEA_FLOOR - 3.4, 0, 0);   // top sits just under the sea floor
-  const rock = box(W, 2.5, D, '#7d5a43', 0, SEA_FLOOR - 5.9, 0, 0);
-  base.add(soil, rock);
-  scene.add(base);
-
-  // Water: a translucent slab so the sea floor and its cables show through.
+  // Sea: a translucent shell so the sea floor and its cables show through.
   const waterMat = new THREE.MeshToonMaterial({ color: '#36b5e8', gradientMap: gradient, transparent: true, opacity: 0.55, depthWrite: false });
-  const top = new THREE.Mesh(new THREE.PlaneGeometry(W, D, 1, 1), waterMat);
-  top.rotateX(-Math.PI / 2);
-  top.position.y = 0;
-  top.renderOrder = 2;
-  scene.add(top);
-  const sideMat = new THREE.MeshBasicMaterial({ color: '#2a8fc4', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
-  const H = -SEA_FLOOR;
-  for (const [w, x, z, ry] of [[W, 0, BOARD.z1, 0], [W, 0, BOARD.z0, 0], [D, BOARD.x1, 0, Math.PI / 2], [D, BOARD.x0, 0, Math.PI / 2]]) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(w, H), sideMat);
-    s.position.set(x, -H / 2, z);
-    s.rotation.y = ry;
-    s.renderOrder = 3;
-    scene.add(s);
-  }
+  const water = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 160, 120), waterMat);
+  water.renderOrder = 2;
+  scene.add(water);
 
-  // Foam: a white ring where land meets water, sampled on a grid.
+  // Atmosphere: a soft rim of light around the planet.
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R * 1.16, 64, 48), new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { color: { value: new THREE.Color('#9fe3ff') } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 color; varying vec3 vN; varying vec3 vV;
+      void main() { float k = clamp(-dot(vN, vV), 0.0, 1.0); gl_FragColor = vec4(color, k * k * 1.7); }`,
+  }));
+  glow.raycast = () => {};
+  scene.add(glow);
+
+  // Foam: white dabs where land meets water.
   const foam = [];
-  for (let x = BOARD.x0 + 2; x < BOARD.x1 - 2; x += 1.6) {
-    for (let z = BOARD.z0 + 2; z < BOARD.z1 - 2; z += 1.6) {
+  for (let x = -200; x < 200; x += 1.6) {
+    for (let z = -170; z < 240; z += 1.6) {
+      if (Math.hypot(x, z) > 290) continue;
       const h = heightAt(x, z);
-      if (h < 0 && h > -0.9 && landness(x, z) > -0.04) foam.push([x, z]);
+      if (h < 0 && h > -0.9 && landness(x, z) > -0.04 && Math.random() < squeeze(x, z) + 0.1) foam.push([x, z]);
     }
   }
   const foamMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(0.9, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false }), foam.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
-  foam.forEach(([x, z], i) => foamMesh.setMatrixAt(i, m4.compose(new THREE.Vector3(x, 0.03, z), q, new THREE.Vector3(1, 1, 1))));
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qx = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  const one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+  foam.forEach(([x, z], i) => foamMesh.setMatrixAt(i, m4.compose(sph(x, 0.04, z, p), frameAt(x, z, q).multiply(qx), one)));
   foamMesh.renderOrder = 4;
+  foamMesh.raycast = () => {};
   scene.add(foamMesh);
 
-  return { terrain, water: top, waterMat, foamMesh };
+  return { terrain, water, waterMat, foamMesh };
 }
 
 // ---------------------------------------------------------------- instanced helpers
 
-const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _qy = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color();
 
 // items: {x, y, z, sx, sy, sz, color, ry}
 function instanced(geo, items, { line = 0.1, shadow = true, faceted = false } = {}) {
@@ -164,8 +196,8 @@ function instanced(geo, items, { line = 0.1, shadow = true, faceted = false } = 
   const size = new THREE.Vector3();
   geo.boundingBox.getSize(size);
   items.forEach((it, i) => {
-    _p.set(it.x, it.y, it.z);
-    _q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0);
+    sph(it.x, it.y, it.z, _p);
+    frameAt(it.x, it.z, _q).multiply(_qy.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, it.ry || 0));
     _s.set(it.sx, it.sy, it.sz);
     body.setMatrixAt(i, _m.compose(_p, _q, _s));
     body.setColorAt(i, _c.set(it.color));
@@ -214,11 +246,12 @@ const ROOF_COLORS = ['#e76f51', '#c0504d', '#6d597a', '#457b9d', '#e9a03b'];
 
 export function buildTowns(world) {
   const segs = cableSegments(world);
-  const ground = world.nodes.filter((n) => !['router', 'repeater', 'edge'].includes(n.type));
+  const ground = world.nodes.filter((n) => !['router', 'repeater'].includes(n.type));
   const r = rand(11);
   const towers = [], roofs = [], caps = [];
   for (const c of world.cities) {
-    const step = c.town ? 1.9 : 2.3;
+    // the far side of the planet squeezes the map sideways, so space lots out there
+    const step = (c.town ? 1.9 : 2.3) / squeeze(c.x, c.z);
     for (let x = c.x - c.r; x <= c.x + c.r; x += step) {
       for (let z = c.z - c.r; z <= c.z + c.r; z += step) {
         const d = Math.hypot(x - c.x, z - c.z) / c.r;
@@ -246,14 +279,15 @@ export function buildTowns(world) {
 
 export function buildTrees(world) {
   const segs = cableSegments(world);
-  const ground = world.nodes.filter((n) => !['router', 'repeater', 'edge'].includes(n.type));
+  const ground = world.nodes.filter((n) => !['router', 'repeater'].includes(n.type));
   const r = rand(5);
   const pines = [], rounds = [], trunks = [];
-  for (let x = BOARD.x0; x < BOARD.x1; x += 1.7) {
-    for (let z = BOARD.z0; z < BOARD.z1; z += 1.7) {
+  for (let x = -200; x < 200; x += 1.7) {
+    for (let z = -170; z < 240; z += 1.7) {
       const jx = x + (r() - 0.5) * 1.4, jz = z + (r() - 0.5) * 1.4;
+      if (Math.hypot(jx, jz) > 290) continue;
       const h = heightAt(jx, jz);
-      if (h < 1 || h > 12.5) continue;
+      if (h < 1 || h > 12.5 || icy(jx, jz) || r() > squeeze(jx, jz)) continue;
       const forest = Math.sin(jx * 0.11 + 1.3) * Math.cos(jz * 0.13) + Math.sin(jx * 0.05 - jz * 0.07);
       if (forest < 0.55 || r() < 0.35) continue;
       if (world.cities.some((c) => Math.hypot(c.x - jx, c.z - jz) < c.r + 2.5)) continue;
@@ -286,8 +320,7 @@ export function buildLife(scene) {
     scene.add(b);
     movers.push((t) => {
       const a = t * sp;
-      b.position.set(cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r);
-      b.rotation.y = -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2);
+      place(b, cx + Math.cos(a) * r, Math.sin(t * 2 + cx) * 0.08, cz + Math.sin(a) * r, -a + (sp > 0 ? -Math.PI / 2 : Math.PI / 2));
     });
   }
 
@@ -295,10 +328,8 @@ export function buildLife(scene) {
   const ship = new THREE.Group();
   ship.add(box(5, 0.9, 1.8, '#f1faee', 0, -0.3, 0, 0.08), box(1.6, 1.2, 1.4, '#ffc300', 1.2, 0.6, 0, 0.07),
     cyl(0.12, 0.12, 2.2, '#1d2a44', -1.4, 0.6, 0, 6, 0), box(0.2, 0.2, 1.8, '#1d2a44', -1.9, 2.6, 0, 0));
-  ship.position.set(56, 0, 30);
-  ship.rotation.y = 0.5;
   scene.add(ship);
-  movers.push((t) => { ship.position.y = Math.sin(t * 1.6) * 0.1; ship.rotation.z = Math.sin(t * 1.3) * 0.03; });
+  movers.push((t) => { place(ship, 56, Math.sin(t * 1.6) * 0.1, 30, 0.5); ship.rotateX(Math.sin(t * 1.3) * 0.03); });
 
   // Wind farm on the moor.
   for (const [x, z] of [[-100, -6], [-104, 0], [-97, -12], [-108, -10]]) {
@@ -316,8 +347,7 @@ export function buildLife(scene) {
     }
     rotor.add(ball(0.3, '#e63946', 0, 0, 0, 0.04));
     t.add(rotor);
-    t.position.set(x, y, z);
-    t.rotation.y = 0.4;
+    place(t, x, y, z, 0.4);
     scene.add(t);
     movers.push((tt) => { rotor.rotation.z = -tt * 1.4 + x; });
   }
@@ -326,7 +356,8 @@ export function buildLife(scene) {
   const clouds = new THREE.Group();
   const cr = rand(3);
   const cloudMat = toon('#ffffff', { transparent: true, opacity: 0.92 });
-  for (let i = 0; i < 7; i++) {
+  const Y = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 16; i++) {
     const c = new THREE.Group();
     for (let k = 0; k < 5; k++) {
       const m = new THREE.Mesh(flat(new THREE.IcosahedronGeometry(2.4 + cr() * 2, 1)), cloudMat);
@@ -334,17 +365,14 @@ export function buildLife(scene) {
       m.castShadow = true;
       c.add(m);
     }
-    c.position.set(BOARD.x0 + cr() * (BOARD.x1 - BOARD.x0), 34 + cr() * 8, BOARD.z0 + cr() * (BOARD.z1 - BOARD.z0));
-    c.userData.speed = 1.2 + cr() * 1.5;
+    // anywhere between the polar circles, floating above the hills
+    const dir = new THREE.Vector3().setFromSphericalCoords(1, 0.5 + cr() * (Math.PI - 1), cr() * Math.PI * 2);
+    c.position.copy(dir).multiplyScalar(PLANET_R + 19 + cr() * 4);
+    c.quaternion.setFromUnitVectors(Y, dir);
     clouds.add(c);
   }
   scene.add(clouds);
-  movers.push((t, dt) => {
-    for (const c of clouds.children) {
-      c.position.x += c.userData.speed * dt;
-      if (c.position.x > BOARD.x1 + 15) c.position.x = BOARD.x0 - 15;
-    }
-  });
+  movers.push((t, dt) => { clouds.rotation.y += dt * 0.012; });
   return { movers, clouds };
 }
 
@@ -414,13 +442,6 @@ export function modelFor(n, layerColor) {
       r.rotation.z = Math.PI / 2;
       r.position.y = 0.5;
       g.add(r);
-      break;
-    }
-    case 'edge': {
-      g.add(cyl(0.7, 0.9, 1.2, layerColor, 0, -0.4, 0, 10));
-      g.add(cyl(0.72, 0.72, 0.3, '#1d2a44', 0, 0.2, 0, 10, 0));
-      g.add(cyl(0.06, 0.06, 2.4, '#1d2a44', 0, 0.8, 0, 6, 0));
-      g.add(box(1.2, 0.7, 0.05, '#e63946', 0.62, 2.4, 0, 0.03));
       break;
     }
     case 'router': {
@@ -509,7 +530,6 @@ export function modelFor(n, layerColor) {
 // Height a node's model stands at.
 export function nodeY(world, n) {
   if (n.type === 'router') return Math.max(0, heightAt(n.x, n.z)) + (n.tier === 'core' ? 12 : 8.5);
-  if (n.type === 'edge') return 0;
   if (n.type === 'repeater') return heightAt(n.x, n.z);
   return Math.max(0.4, heightAt(n.x, n.z));
 }
@@ -539,21 +559,25 @@ const dash = (() => {
 // A cable's centre line as a three.js curve.
 export function linkCurve(world, l, nodeYs) {
   if (l.layer === 'mpls') {
+    // an arc over the planet: straight on the map, raised in the middle
     const a = world.byId[l.a], b = world.byId[l.b];
-    const A = new THREE.Vector3(a.x, nodeYs[a.id], a.z), B = new THREE.Vector3(b.x, nodeYs[b.id], b.z);
-    const len = A.distanceTo(B);
-    const mid = A.clone().add(B).multiplyScalar(0.5);
-    mid.y = Math.max(A.y, B.y) + 3 + len * 0.16;
-    return { curve: new THREE.QuadraticBezierCurve3(A, mid, B), len };
+    const ya = nodeYs[a.id], yb = nodeYs[b.id];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const ym = Math.max(ya, yb) + 3 + len * 0.16;
+    const pts = [];
+    for (let i = 0, n = Math.max(12, Math.ceil(len / 2)); i <= n; i++) {
+      const t = i / n;
+      const y = (1 - t) * (1 - t) * ya + 2 * t * (1 - t) * ym + t * t * yb;
+      pts.push(sph(a.x + (b.x - a.x) * t, y, a.z + (b.z - a.z) * t));
+    }
+    return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len };
   }
   const path = linkPath(world, l);
   const pts = samplePath(path, 1.4).map(([x, z]) => {
     const h = groundY(x, z);
     const y = h < 0 ? heightAt(x, z) + LIFT.submarine : h + LIFT[l.layer];
-    return new THREE.Vector3(x, y, z);
+    return sph(x, y, z);
   });
-  // Off-map buoys float: rise from the floor to the surface at the very end.
-  if (world.byId[l.b].type === 'edge') pts[pts.length - 1].y = -0.4;
   return { curve: new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5), len: pathLength(path) };
 }
 

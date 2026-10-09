@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWorld, heightAt, linkPath, samplePath, LAYER, CITIES } from '../js/world.js';
+import { buildWorld, heightAt, linkPath, samplePath, LAYER, CITIES, flatToDir, dirToFlat } from '../js/world.js';
 
 const world = buildWorld();
-const SEA_TYPES = new Set(['repeater', 'edge']);
+const SEA_TYPES = new Set(['repeater']);
 
 test('every link joins two nodes that exist, on a known layer', () => {
   for (const l of world.links) {
@@ -49,4 +49,13 @@ test('submarine cables have repeaters on the sea floor', () => {
   const reps = world.nodes.filter((n) => n.type === 'repeater');
   assert.ok(reps.length >= 8, `only ${reps.length}`);
   for (const r of reps) assert.ok(heightAt(r.x, r.z) < -3);
+});
+
+test('the planet projection round-trips', () => {
+  for (const [x, z] of [[0, 0], [30, -20], [-120, 80], [160, 72], [-150, 228]]) {
+    const d = flatToDir(x, z);
+    assert.ok(Math.abs(Math.hypot(...d) - 1) < 1e-9);
+    const [bx, bz] = dirToFlat(...d);
+    assert.ok(Math.hypot(bx - x, bz - z) < 1e-6, `${x},${z} -> ${bx},${bz}`);
+  }
 });

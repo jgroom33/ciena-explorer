@@ -1,8 +1,32 @@
 // The world of Netlandia: terrain, places and every network, as plain data.
 // No three.js in here, so the tests can check it under node.
 
+// The map is drawn flat in x/z and then wrapped onto a small planet: an azimuthal
+// equidistant projection around the map centre, so distance from (0, 0) on the
+// map is arc length on the planet. Everything far from the centre is the back side.
+export const PLANET_R = 100;
+export const SEA_FLOOR = -6;
+// The part of the flat map that holds the home country.
 export const BOARD = { x0: -130, x1: 130, z0: -88, z1: 88 };
-export const SEA_FLOOR = -14;
+
+// Flat (x, z) -> unit vector from the planet centre. Map centre is +Z, map north (-z) is +Y.
+export function flatToDir(x, z) {
+  const r = Math.hypot(x, z);
+  const s = r > 1e-9 ? Math.sin(r / PLANET_R) / r : 1 / PLANET_R;
+  return [x * s, -z * s, Math.cos(r / PLANET_R)];
+}
+export function dirToFlat(a, b, c) {
+  const th = Math.acos(Math.max(-1, Math.min(1, c)));
+  const st = Math.sin(th);
+  if (st < 1e-9) return th < 1 ? [0, 0] : [0, Math.PI * PLANET_R];
+  const k = (th * PLANET_R) / st;
+  return [a * k, -b * k];
+}
+// How much the map is squeezed sideways at a point: 1 at the centre, ~0.55 at the far islands.
+export function squeeze(x, z) {
+  const th = Math.hypot(x, z) / PLANET_R;
+  return th < 1e-6 ? 1 : Math.sin(th) / th;
+}
 
 // ---------------------------------------------------------------- noise
 
@@ -40,6 +64,16 @@ const BLOBS = [
   [108, -30, 14, 14],  // Palm Point
 ];
 
+// Lands on the far side of the planet are round caps measured on the sphere itself,
+// so the projection does not stretch them: [flat x, flat z, angular radius].
+export const CAPS = [
+  { id: 'farland', at: [158, 70], r: 0.26 },
+  { id: 'westerland', at: [-160, 52], r: 0.21 },
+  { id: 'antipoda', at: [-150, 228], r: 0.12 },
+  { id: 'north-ice', at: [0, -Math.PI * PLANET_R / 2], r: 0.3, ice: true },
+  { id: 'south-ice', at: [0, Math.PI * PLANET_R / 2], r: 0.24, ice: true },
+].map((c) => ({ ...c, dir: flatToDir(...c.at) }));
+
 // > 0 on land, < 0 at sea. Roughly the fraction of the way in from the coast.
 export function landness(x, z) {
   let f = -Infinity;
@@ -47,7 +81,20 @@ export function landness(x, z) {
     const dx = (x - cx) / rx, dz = (z - cz) / rz;
     f = Math.max(f, 1 - (dx * dx + dz * dz));
   }
+  if (Math.hypot(x, z) > 110) {
+    const d = flatToDir(x, z);
+    for (const c of CAPS) {
+      const ang = Math.acos(Math.min(1, d[0] * c.dir[0] + d[1] * c.dir[1] + d[2] * c.dir[2])) / c.r;
+      f = Math.max(f, 1 - ang * ang);
+    }
+  }
   return f + fbm(x * 0.045, z * 0.045) * 0.14;
+}
+
+// True on the polar ice caps.
+export function icy(x, z) {
+  const d = flatToDir(x, z);
+  return Math.abs(d[1]) > 0.93;
 }
 
 const MOUNTAINS = [
@@ -59,7 +106,7 @@ const MOUNTAINS = [
 
 function rawHeight(x, z) {
   const f = landness(x, z);
-  if (f <= 0) return SEA_FLOOR * smoothstep(0, 0.32, -f) - 0.6 * (1 - smoothstep(0, 0.32, -f));
+  if (f <= 0) return SEA_FLOOR * smoothstep(0, 0.5, -f) - 0.6 * (1 - smoothstep(0, 0.5, -f));
   let h = 0.4 + smoothstep(0, 0.25, f) * 2.2 + Math.max(0, fbm(x * 0.06 + 7, z * 0.06 - 3)) * 5;
   for (const [mx, mz, mh, s] of MOUNTAINS) {
     const d2 = ((x - mx) ** 2 + (z - mz) ** 2) / (s * s);
@@ -73,6 +120,7 @@ const STEP = 1.6;
 export function heightAt(x, z) {
   const h = rawHeight(x, z);
   if (h <= 0.4) return h;
+  if (Math.hypot(x, z) > 140 && icy(x, z)) return 0.9;   // flat polar ice sheets
   const base = Math.floor(h / STEP) * STEP;
   return Math.max(0.4, base + STEP * smoothstep(0.7, 1, (h - base) / STEP));
 }
@@ -131,6 +179,8 @@ export const CITIES = [
   { id: 'dunmore', name: 'Dunmore', x: 6, z: 2, r: 3, town: true },
   { id: 'palmtown', name: 'Palmtown', x: 104, z: -26, r: 3, town: true },
   { id: 'reefside', name: 'Reefside', x: 88, z: 26, r: 3, town: true },
+  { id: 'farland', name: 'Farland', x: 160, z: 72, r: 7, big: true, tall: 0.6, far: true },
+  { id: 'westerland', name: 'Westerland', x: -162, z: 52, r: 5, tall: 0.4, far: true },
 ];
 export const CITY = Object.fromEntries(CITIES.map((c) => [c.id, c]));
 
@@ -169,8 +219,9 @@ const PLACED = [
   N('cls_isla_w', 'cls', 'Isla West Landing Station', 74, 8, ['submarine'], { role: 'Lands the Portsea cable' }),
   N('cls_isla_s', 'cls', 'Isla South Landing Station', 94, 31, ['submarine'], { role: 'Lands the Farland trans-ocean cable' }),
   N('cls_west', 'cls', 'Westmoor Landing Station', -106, 12, ['submarine'], { role: 'Lands the Westerland cable' }),
-  N('edge_far', 'edge', 'To Farland', 124, 84, ['submarine'], { role: 'Trans-ocean cable continues off the map' }),
-  N('edge_west', 'edge', 'To Westerland', -126, 60, ['submarine'], { role: 'Cable continues off the map' }),
+  N('cls_far', 'cls', 'Farland Landing Station', 0, 0, ['submarine'], { role: 'Lands both trans-ocean cables from Netlandia', coastOf: 'farland', toward: [60, 40] }),
+  N('cls_wester', 'cls', 'Westerland Landing Station', 0, 0, ['submarine'], { role: 'Lands the Westerland cable', coastOf: 'westerland', toward: [-106, 12] }),
+  N('dc_far', 'dc', 'Farland Cloud Region', 168, 66, ['dci'], { role: 'Overseas cloud region reached over the trans-ocean cables' }),
 ];
 
 // Routers float above the site that houses them.
@@ -223,9 +274,10 @@ const LINKS = [
 
   // submarine
   L('submarine', 'cls_port', 'cls_isla_w', { sea: true, via: [[50, 30], [62, 22]], name: 'Portsea – Isla Verde cable' }),
-  L('submarine', 'cls_isla_s', 'edge_far', { sea: true, via: [[100, 48], [114, 66]], name: 'Farland trans-ocean cable' }),
-  L('submarine', 'cls_west', 'edge_west', { sea: true, via: [[-116, 26], [-118, 44]], name: 'Westerland cable' }),
-  L('submarine', 'cls_port', 'edge_far', { sea: true, via: [[46, 50], [80, 74]], name: 'Portsea – Farland cable' }),
+  L('submarine', 'cls_isla_s', 'cls_far', { sea: true, via: [[100, 48], [118, 60]], name: 'Isla – Farland trans-ocean cable' }),
+  L('submarine', 'cls_west', 'cls_wester', { sea: true, via: [[-120, 22]], name: 'Westerland cable' }),
+  L('submarine', 'cls_port', 'cls_far', { sea: true, via: [[46, 50], [90, 80], [120, 84]], name: 'Portsea – Farland trans-ocean cable' }),
+  L('dci', 'dc_far', 'cls_far', { note: 'DCI waves from Capitalia and Portsea arrive here over the subsea cables' }),
 
   // MPLS (router to router)
   ...[
@@ -318,6 +370,7 @@ export function samplePath(pts, step = 1) {
 
 export function buildWorld() {
   const nodes = PLACED.map((n) => ({ ...n }));
+  for (const n of nodes) if (n.coastOf) Object.assign(n, coastPoint(CITY[n.coastOf], n.toward));
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
   const links = LINKS.map((l) => ({ ...l }));
 
@@ -403,6 +456,14 @@ export function buildWorld() {
     }
     n.x = x; n.z = z;
   }
+}
+
+// Last dry spot walking from a town toward a point at sea.
+function coastPoint(c, [tx, tz]) {
+  let x = c.x, z = c.z;
+  const len = Math.hypot(tx - x, tz - z), ux = (tx - x) / len, uz = (tz - z) / len;
+  while (heightAt(x + ux * 1.5, z + uz * 1.5) >= 0.6) { x += ux * 0.5; z += uz * 0.5; }
+  return { x, z };
 }
 
 function pointAt(pts, d) {

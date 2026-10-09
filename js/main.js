@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
-import { buildWorld, BOARD, LAYERS, LAYER, ENDPOINT, heightAt } from './world.js';
+import { buildWorld, LAYERS, LAYER, ENDPOINT, heightAt, PLANET_R, flatToDir } from './world.js';
 import {
-  buildBoard, buildTowns, buildTrees, buildLife, modelFor, nodeY, buildCable, routerPole,
+  buildPlanet, buildTowns, buildTrees, buildLife, modelFor, nodeY, buildCable, routerPole, place, sph,
 } from './scene.js';
 
 const world = buildWorld();
@@ -18,41 +18,65 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(38, 1, 1, 2000);
-// Start framed on the whole board, nudged so the layer panel doesn't cover the west coast.
-const HOME = { pos: new THREE.Vector3(-26, 250, 178), target: new THREE.Vector3(-26, 0, 10) };
-camera.position.copy(HOME.pos);
+const R = PLANET_R;
+const UP = new THREE.Vector3(0, 1, 0);
 
-const controls = new OrbitControls(camera, canvas);
-controls.target.copy(HOME.target);
+// OrbitControls spins a stand-in camera around the planet's centre; the real camera
+// is then set from it each frame: straight down at the planet when far away, tilting
+// toward the horizon as it comes in close, the way a little-planet game frames it.
+const rig = new THREE.PerspectiveCamera(38, 1, 1, 3000);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3000);
+const dirOf = (x, z) => new THREE.Vector3(...flatToDir(x, z));
+// Open over the home country, a little west so the layer panel doesn't hide Westmoor.
+const HOME = { dir: dirOf(-14, 10), dist: R + 250 };
+rig.position.copy(HOME.dir).multiplyScalar(HOME.dist);
+
+const controls = new OrbitControls(rig, canvas);
+controls.target.set(0, 0, 0);
+controls.enablePan = false;
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.screenSpacePanning = false;          // pan across the ground, like a map
-controls.minPolarAngle = 0.08;
-controls.maxPolarAngle = 1.0;                 // never drop below a bird's-eye tilt
-controls.minDistance = 28;
-controls.maxDistance = 330;
-controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
-controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
-controls.addEventListener('change', () => {
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, BOARD.x0, BOARD.x1);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, BOARD.z0, BOARD.z1);
-  controls.target.y = 0;
-});
+controls.minPolarAngle = 0.25;
+controls.maxPolarAngle = Math.PI - 0.25;
+controls.minDistance = R + 26;
+controls.maxDistance = R * 4.5;
+controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
-scene.add(new THREE.HemisphereLight('#ffffff', '#7d8fa3', 1.6));
+const _d = new THREE.Vector3(), _n = new THREE.Vector3(), _f = new THREE.Vector3();
+function aimCamera() {
+  const dist = rig.position.length();
+  const h = dist - R;
+  _d.copy(rig.position).normalize();
+  _n.copy(UP).addScaledVector(_d, -_d.y);                        // map north at this spot
+  if (_n.lengthSq() < 1e-6) _n.set(0, 0, -1);
+  _n.normalize();
+  const tilt = 0.72 * (1 - THREE.MathUtils.smoothstep(h, 45, 190));
+  _f.copy(_d).multiplyScalar(R);                                  // the spot under the camera
+  camera.position.copy(_f).addScaledVector(_d, h * Math.cos(tilt)).addScaledVector(_n, -h * Math.sin(tilt));
+  camera.up.copy(_n).multiplyScalar(Math.cos(tilt)).addScaledVector(_d, Math.sin(tilt));
+  camera.lookAt(_f.addScaledVector(_n, h * 0.12 * Math.sin(tilt)));
+  // drag moves the ground under the pointer at about the same rate at any zoom
+  controls.rotateSpeed = THREE.MathUtils.clamp(h / (R * 1.9), 0.1, 1);
+  // keep the sun and sky light over whatever is in view, so it's always daytime
+  sun.position.copy(_d).multiplyScalar(300).addScaledVector(_n, 120).addScaledVector(_side.crossVectors(_n, _d), -140);
+  hemi.position.copy(_d);
+}
+const _side = new THREE.Vector3();
+
+const hemi = new THREE.HemisphereLight('#ffffff', '#7d8fa3', 1.6);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff4e0', 2.4);
-sun.position.set(-90, 160, 70);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, { left: -150, right: 150, top: 110, bottom: -110, near: 10, far: 450 });
+Object.assign(sun.shadow.camera, { left: -R * 1.25, right: R * 1.25, top: R * 1.25, bottom: -R * 1.25, near: 100, far: 500 });
 sun.shadow.bias = -0.001;
 sun.shadow.normalBias = 0.4;
-scene.add(sun);
+scene.add(sun, sun.target);
 
 // ---------------------------------------------------------------- world
 
-const board = buildBoard(scene);
+const board = buildPlanet(scene);
 scene.add(buildTowns(world), buildTrees(world));
 const life = buildLife(scene);
 
@@ -69,7 +93,7 @@ const blinkers = [], puffs = [];
 for (const n of world.nodes) {
   const home = n.layers[0];
   const g = modelFor(n, LAYER[home].color);
-  g.position.set(n.x, nodeYs[n.id], n.z);
+  place(g, n.x, nodeYs[n.id], n.z);
   g.userData.node = n;
   g.traverse((o) => {
     o.userData.nodeId = n.id;
@@ -127,10 +151,12 @@ function movePackets(t) {
 }
 
 // Selection ring.
-const ring = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-ring.rotation.x = -Math.PI / 2;
+const ring = new THREE.Group();
+const ringMesh = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 8, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+ringMesh.rotation.x = -Math.PI / 2;
+ringMesh.raycast = () => {};
+ring.add(ringMesh);
 ring.visible = false;
-ring.raycast = () => {};
 scene.add(ring);
 
 // ---------------------------------------------------------------- layer state
@@ -164,46 +190,45 @@ function emphasise() {
 // ---------------------------------------------------------------- camera moves
 
 let flight = null;
-function flyTo(target, distance, polar = 0.62, azimuth = null, ms = 1300) {
-  const from = { pos: camera.position.clone(), target: controls.target.clone() };
-  const off = camera.position.clone().sub(controls.target);
-  const sph = new THREE.Spherical().setFromVector3(off);
-  sph.radius = distance;
-  sph.phi = polar;
-  if (azimuth !== null) sph.theta = azimuth;
-  const to = { target: target.clone().setY(0) };
-  to.pos = to.target.clone().add(new THREE.Vector3().setFromSpherical(sph));
-  flight = { from, to, t0: performance.now(), ms: reduceMotion ? 1 : ms };
+// Spin the planet to bring `dir` under the camera, ending `h` above the ground.
+function flyToDir(dir, h, ms = 1400) {
+  const from = rig.position.clone().normalize();
+  const turn = new THREE.Quaternion().setFromUnitVectors(from, dir.clone().normalize());
+  flight = { from, turn, d0: rig.position.length(), d1: R + h, t0: performance.now(), ms: reduceMotion ? 1 : ms };
 }
+const flyTo = (x, z, h, ms) => flyToDir(dirOf(x, z), h, ms);
+const _fq = new THREE.Quaternion();
 function stepFlight(now) {
   if (!flight) return;
   const k = Math.min(1, (now - flight.t0) / flight.ms);
   const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-  camera.position.lerpVectors(flight.from.pos, flight.to.pos, e);
-  controls.target.lerpVectors(flight.from.target, flight.to.target, e);
+  _fq.identity().slerp(flight.turn, e);
+  rig.position.copy(flight.from).applyQuaternion(_fq).multiplyScalar(THREE.MathUtils.lerp(flight.d0, flight.d1, e));
   if (k >= 1) flight = null;
 }
+const height = () => rig.position.length() - R;
 
-function frameNodes(ids, polar = 0.6) {
-  const box = new THREE.Box3();
-  for (const id of ids) { const n = world.byId[id]; box.expandByPoint(new THREE.Vector3(n.x, 0, n.z)); }
-  const c = box.getCenter(new THREE.Vector3());
-  const s = box.getSize(new THREE.Vector3());
-  const fit = Math.max(s.x / camera.aspect, s.z * 1.35, 30);
-  flyTo(c, THREE.MathUtils.clamp(fit * 1.25, 45, 320), polar, 0);
+// Frame a set of nodes: aim at their middle on the sphere, back off to fit the widest.
+function frameNodes(ids) {
+  const mid = new THREE.Vector3();
+  const dirs = ids.map((id) => dirOf(world.byId[id].x, world.byId[id].z));
+  for (const d of dirs) mid.add(d);
+  mid.normalize();
+  const spread = Math.max(...dirs.map((d) => d.angleTo(mid))) * R;
+  flyToDir(mid, THREE.MathUtils.clamp(spread * 2.2 / Math.min(1, camera.aspect), 45, R * 2.6));
 }
 
 function focusLayer(id) {
   for (const l of LAYERS) shown[l.id] = l.id === id;
   applyLayers();
   const ids = world.nodes.filter((n) => n.layers.includes(id)).map((n) => n.id);
-  frameNodes(ids, id === 'mpls' ? 0.85 : 0.6);
+  frameNodes(ids);
   showCaption(LAYER[id]);
 }
 function showAll() {
   for (const l of LAYERS) shown[l.id] = true;
   applyLayers();
-  flyTo(HOME.target, HOME.pos.distanceTo(HOME.target), new THREE.Spherical().setFromVector3(HOME.pos.clone().sub(HOME.target)).phi, 0);
+  flyToDir(HOME.dir, HOME.dist - R);
   showCaption(null);
 }
 
@@ -285,9 +310,9 @@ function select(id) {
   if (!id) { card.hidden = true; return; }
   const n = world.byId[id];
   const layer = LAYER[n.layers[0]];
-  ring.position.set(n.x, nodeYs[id] + (n.type === 'router' ? -0.6 : 0.25), n.z);
+  place(ring, n.x, nodeYs[id] + (n.type === 'router' ? -0.6 : 0.25), n.z);
   ring.scale.setScalar(n.type === 'dc' ? 2 : n.type === 'router' ? 0.7 : n.type === 'ila' || n.type === 'repeater' ? 0.5 : 1);
-  ring.material.color.set(layer.color);
+  ringMesh.material.color.set(layer.color);
   card.style.setProperty('--c', layer.color);
   const neighbours = [...new Set(n.links.map((lid) => {
     const l = world.links.find((x) => x.id === lid);
@@ -313,7 +338,7 @@ card.addEventListener('click', (e) => {
     const lay = n.layers.find((x) => !shown[x]);
     if (lay && !n.layers.some((x) => shown[x])) { shown[lay] = true; applyLayers(); }
     select(n.id);
-    flyTo(new THREE.Vector3(n.x, 0, n.z), Math.min(camera.position.distanceTo(controls.target), 110), 0.6);
+    flyTo(n.x, n.z, Math.min(height(), 110));
   }
 });
 $('#card-close').addEventListener('click', () => select(null));
@@ -327,29 +352,31 @@ for (const c of world.cities) {
   el.className = 'lbl city' + (c.town ? ' town' : '') + (c.big ? ' big' : '');
   el.textContent = c.name;
   labelLayer.append(el);
-  labels.push({ el, pos: new THREE.Vector3(c.x, Math.max(0, heightAt(c.x, c.z)) + (c.town ? 4 : 9), c.z), town: c.town });
+  labels.push({ el, pos: sph(c.x, Math.max(0, heightAt(c.x, c.z)) + (c.town ? 4 : 9), c.z), town: c.town });
 }
-for (const n of world.nodes.filter((x) => x.type === 'edge' || x.type === 'dc')) {
+for (const n of world.nodes.filter((x) => x.type === 'dc' || (x.type === 'cls' && x.id.endsWith('far')))) {
   const el = document.createElement('div');
   el.className = 'lbl tag';
   el.style.setProperty('--c', LAYER[n.layers[0]].color);
-  el.textContent = n.type === 'edge' ? n.name + ' →' : n.name;
+  el.textContent = n.name;
   labelLayer.append(el);
-  labels.push({ el, pos: new THREE.Vector3(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z), node: n.id, tag: true });
+  labels.push({ el, pos: sph(n.x, nodeYs[n.id] + (n.type === 'dc' ? 5 : 4), n.z), node: n.id, tag: true });
 }
 const tip = document.createElement('div');
 tip.className = 'lbl tip';
 tip.hidden = true;
 labelLayer.append(tip);
 
-const _lp = new THREE.Vector3();
+const _lp = new THREE.Vector3(), _fv = new THREE.Vector3();
+// On the side of the planet facing the camera (not over the horizon).
+const facing = (p) => _fv.copy(camera.position).sub(p).dot(p) > 0;
 function placeLabels() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  const dist = camera.position.distanceTo(controls.target);
+  const hh = height();
   for (const L of labels) {
-    let vis = opts.labels;
-    if (L.town) vis &&= dist < 200;
-    if (L.tag) vis &&= dist < 230 && nodeObjs[L.node].visible;
+    let vis = opts.labels && facing(L.pos);
+    if (L.town) vis &&= hh < 150;
+    if (L.tag) vis &&= hh < 140 && nodeObjs[L.node].visible;
     if (vis) {
       _lp.copy(L.pos).project(camera);
       vis = _lp.z < 1 && Math.abs(_lp.x) < 1.1 && Math.abs(_lp.y) < 1.1;
@@ -370,7 +397,7 @@ function pick(ev) {
   for (const hit of ray.intersectObjects(pickables, true)) {
     let o = hit.object, ok = true;
     for (; o; o = o.parent) if (!o.visible) { ok = false; break; }
-    if (ok && hit.object.userData.nodeId) return hit.object.userData.nodeId;
+    if (ok && hit.object.userData.nodeId && facing(nodeObjs[hit.object.userData.nodeId].position)) return hit.object.userData.nodeId;
   }
   return null;
 }
@@ -385,8 +412,7 @@ canvas.addEventListener('pointerup', (ev) => {
   select(id);
   if (id) {
     const n = world.byId[id];
-    const d = camera.position.distanceTo(controls.target);
-    if (d > 140) flyTo(new THREE.Vector3(n.x, 0, n.z), 110, 0.6);
+    if (height() > 140) flyTo(n.x, n.z, 110);
   }
 });
 function hover() {
@@ -446,8 +472,9 @@ function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
+    camera.aspect = rig.aspect = w / h;
     camera.updateProjectionMatrix();
+    rig.updateProjectionMatrix();
   }
 }
 
@@ -459,13 +486,14 @@ function frame(now) {
   resize();
   stepFlight(now);
   controls.update();
+  aimCamera();
   for (const m of life.movers) m(t, reduceMotion ? 0 : dt);
   movePackets(t);
   for (const b of blinkers) b.visible = Math.sin(t * 4 + b.id) > -0.2;
   for (const p of puffs) p.position.y = 4.4 + p.userData.puff * 0.9 + ((t * 0.8 + p.userData.puff / 3) % 1) * 0.9;
   for (const id in linkObjs) if (linkObjs[id].mat.alphaMap) linkObjs[id].mat.alphaMap.offset.x = -t * 0.8;
-  ring.rotation.z = t;
-  ring.position.y += Math.sin(t * 3) * 0.004;
+  ringMesh.rotation.z = t;
+  ringMesh.position.y = Math.sin(t * 3) * 0.3;
   hover();
   placeLabels();
   renderer.render(scene, camera);
@@ -473,4 +501,4 @@ function frame(now) {
 }
 applyLayers();
 requestAnimationFrame(frame);
-window.netlandia = { world, select, focusLayer, showAll, camera, controls };
+window.netlandia = { world, select, focusLayer, showAll, flyTo, camera, controls };
