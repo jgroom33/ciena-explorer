@@ -176,8 +176,9 @@ random and played in its short version, then a two-question quiz from the level'
 each win lifts the clouds off the whole level, and Lord Lag ends it with two rounds
 replaying games from the run. Each way of playing has its own board. The quick run also
 keeps the reading short: one card before each game (the villain, one line of taunt, one
-line of how to play), the quiz straight after the game, and a short win card that points
-to the notebook for the full lesson. In the
+line of how to play), a breather after the game (the minion beaten, one line of the game,
+the lesson's first sentence as a hint, and no clock until "I'm ready"), then the quiz, and
+a short win card that points to the notebook for the full lesson. In the
 story the planet starts under cloud. Lord Lag has switched Netlandia off, and each
 network is won back stop by stop, in the order a phone's packets travel: the **city's
 businesses and homes**, the **cell towers**, the **core**. That finishes the packet
@@ -236,8 +237,9 @@ real network; a network is unlocked when its last stop is won. There are five le
 
 Levels 1 to 4 close with a **final exam** on their networks; when it is passed with a
 mistake, the card lists each question missed with the answer picked and the right one.
-**Level 5** is the fight with Lord Lag, a recap of everything: four short rounds, one
-game picked at random from each level, one of his hearts gone for each round won.
+**Level 5** is the fight with Lord Lag, a recap of everything: in the full story, four
+short rounds, one game picked at random from each level; in a quick run, two rounds
+replaying games from the run. One of his hearts goes for each round won.
 
 The games are tuned to be easy: slow motion while you choose, wide targets, and robot
 players that react in a second or two win most rounds. Losing is **You died**, with
@@ -316,15 +318,17 @@ inlined, so it can be shared as one file.
 | `js/tech.js` | the technology topics for each network (Engineer mode) and the step player |
 | `js/basics.js` | the introduction-to-networking topics for each network (Explorer mode) |
 | `js/vocab.js` | the two reading modes: every name, label and sentence the HUD prints, in plain words and in the trade's |
-| `js/story.js` | Netlandia Quest with no page in it: the order the networks unlock in, the five levels, each network's stops and questions, each stop's villain, taunt, loss and lesson, the riddles for what's next, in both readings, the two scores and the notebook's records, and the rules (points, lives, ranks, saved progress) |
-| `js/minigames.js` | the Quest's mini-games as small simulations a test can play (start, tick, press, result, summary) plus a 2D-canvas draw: Last Mile Dash, Packet Tetris, Storm Chaser, Stop the Fiber Cut, Keep the Beat, Guard the Gate, Packet Race, Repeater Rescue, Robot Dive, Fiber Splice, Cable Layer, Colour Memory, Rainbow Packing, Light Path, Mesh Rescue, and the fight with Lord Lag built from one game per level |
-| `js/game.js` | the Quest on screen: the start screen, the score bar and the challenge card; reaches the globe only through the hooks main.js hands it |
+| `js/story.js` | Netlandia Quest with no page in it: the order the networks unlock in, the five levels, each network's stops and questions, each stop's villain, taunt, loss and lesson, the riddles for what's next, in both readings, the two scores and the notebook's records, the board, the two ways to play (the quick run's random picks, short quiz and whole-level unlocks), and the rules (points, lives, ranks, saved progress) |
+| `js/minigames.js` | the Quest's mini-games as small simulations a test can play (start, tick, press, result, summary) plus a 2D-canvas draw: Last Mile Dash, Packet Tetris, Storm Chaser, Stop the Fiber Cut, Keep the Beat, Guard the Gate, Packet Race, Repeater Rescue, Robot Dive, Fiber Splice, Cable Layer, Colour Memory, Rainbow Packing, Light Path, Mesh Rescue, and the fight with Lord Lag built from one game per level; each game's short version and its one-line tip for the quick run |
+| `js/game.js` | the Quest on screen: the start screen (quick run or full story, the boards), the score bar, the challenge card, the notebook, New player, the sounds and the `?dev` menu; reaches the globe only through the hooks main.js hands it |
 | `js/main.js` | globe camera and side switch, the networks as clickable regions with their halos and the Quest's cloud cover, the airliner, switching views, labels, picking, the site card |
 | `css/net.css` | the HUD, and the Engineer theme as a second set of tokens |
 | `test/tech.test.mjs` | every topic's steps, in both modes, touch only that network's sites and links; Explorer's vocabulary covers every site and network without jargon; the brief's technologies are where it asked |
 | `test/world.test.mjs` | data checks: links resolve, transport on side A and data on side B, gear and fibre on land, subsea cables at sea, no two cables run alongside each other, every ROADM and core router has 3+ routes, no customer or cell site on a spur, the VPN offices on three different core routers, every cell site has an RU, DU and CU and every CU an uplink, every home reaches the streaming cache, the six networks own their own links, each network's sites stand inside its region |
-| `test/story.test.mjs` | the Quest covers every network once (side B, then the ocean, then side A), every line has both readings, and the rules score, lose, win, unlock in order and reload saved progress safely |
-| `test/minigames.test.mjs` | robots play every mini-game and the final fight: a careful player wins, an idle one loses; calls in best effort lose Packet Tetris, following Lord Lag's shortest road loses Packet Race, waiting for the ship loses Repeater Rescue, a two-span request needs the same colours on both, and every real sequence of choices in Mesh Rescue can still be won |
+| `test/story.test.mjs` | the Quest covers every network once (side B, then the ocean, then side A), every line has both readings, and the rules score, lose, win, unlock in order and reload saved progress safely; the quick run picks a game from each level and brings each level back whole; the two scores, the notebook and the board survive a reload and drop anything unknown |
+| `test/minigames.test.mjs` | robots play every mini-game and the final fight: a careful player wins, an idle one loses; calls in best effort lose Packet Tetris, following Lord Lag's shortest road loses Packet Race, waiting for the ship loses Repeater Rescue, a two-span request needs the same colours on both, every real sequence of choices in Mesh Rescue can still be won, guards alone let disguised bots through Guard the Gate, searching without pings runs Robot Dive's battery down, an offset core loses light in Fiber Splice, Colour Memory's pattern grows a colour a round, and every Light Path puzzle can be solved and never starts solved |
+| `test/build.test.mjs` | the single-file page carries the phone viewport and its build date |
+| `.github/workflows/test.yml` | on every push and pull request, runs the tests and checks `dist/netlandia.html` was rebuilt |
 | `build.mjs` | bundles everything into `dist/netlandia.html`, and fails if two modules declare the same top-level name |
 | `vendor/` | three.js r160 and OrbitControls (MIT) |
 

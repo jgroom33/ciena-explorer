@@ -6,7 +6,7 @@ import {
   isUnlocked, rankOf, storyDone, bossNext, startChallenge, answer, winStage, winChapter, winFinal, restartStory,
   FLAWLESS_BONUS, levelOf, examAt, jumpTo, TEASERS,
   loadNotebook, noteGame, noteExam, noteAnswer, noteChapter, questionOf, newNotebook, loadBoard, addToBoard,
-  stagesOf, isQuick, quickQuiz,
+  stagesOf, isQuick, quickQuiz, QUICK_QUIZ,
 } from './story.js';
 import { MINIGAMES, BOSS, SHORT_OPTS, TIPS } from './minigames.js';
 
@@ -359,6 +359,8 @@ export function initQuest(hooks) {
     // a quick run puts the villain and the how-to on one short card
     openCard({ kind: isQuick(story) ? 'quickstart' : 'taunt', id, gid });
   }
+  // a lesson's first sentence, as a hint before the quiz
+  const firstSentence = (s) => (s.match(/^[^.!?]+[.!?]/) ?? [s])[0];
   // a villain's taunt, cut down to its first sentence or two
   const shortTaunt = (s) => {
     const parts = s.match(/[^.!?…]+[.!?…]+["”]?\s*/g) ?? [s];
@@ -408,6 +410,18 @@ export function initQuest(hooks) {
         <p class="q-say">“${esc(shortTaunt(say(stage.taunt)))}”</p>
         <p class="q-tip">👉 ${esc(TIPS[v.gid][words])}</p>
         <div class="q-btns"><button data-q="later">Later</button><button class="primary" data-q="go">Start ▶</button></div>`;
+    } else if (v.kind === 'breather') {
+      // between a quick run's game and its quiz: cheer, one line of the game, one line of
+      // the lesson as a hint, and what comes next; the clock waits for the player
+      const who = stage.villain;
+      card.innerHTML = `
+        <span class="q-level-tag">${where}</span>
+        <span class="q-k">🎉 ${who.name === 'Lord Lag' ? (hooks.plain() ? 'You beat Lord Lag\'s packet!' : 'You beat Lord Lag!') : `You beat ${esc(who.name)}!`}</span>
+        <h3>${who.face} ${esc(MINIGAMES[v.gid].name[words])} · +${num(v.carry)} 🎮${v.flawless ? ' · flawless' : ''}</h3>
+        ${v.st ? `<p class="q-say">${esc(MINIGAMES[v.gid].summary(v.st, words))}</p>` : ''}
+        <p class="q-tip">💡 ${esc(firstSentence(say(stage.lesson)))}</p>
+        <p class="q-sum">🧠 ${hooks.plain() ? 'Next' : 'Up next'}: ${QUICK_QUIZ} ${hooks.plain() ? 'quick questions' : 'questions'} · ${STORY_SECONDS} s ${hooks.plain() ? 'each' : 'per question'}</p>
+        <div class="q-btns"><button class="primary" data-q="exam">${hooks.plain() ? 'I\'m ready ▶' : 'Ready ▶'}</button></div>`;
     } else if (v.kind === 'question') {
       const c = v.c, q = say(c.questions[c.i]);
       const hearts = Array.from({ length: STORY_LIVES }, (_, i) => `<i class="${i < c.lives ? 'on' : ''}">♥</i>`).join('');
@@ -417,7 +431,6 @@ export function initQuest(hooks) {
         <div class="q-time"><i></i></div>
         <h3 class="q-q">${esc(q.q)}</h3>
         <div class="q-answers">${c.order[c.i].map((k, pos) => `<button data-answer="${pos}"><kbd>${pos + 1}</kbd>${esc(q.a[k])}</button>`).join('')}</div>
-        ${!v.last && v.intro && c.i === 0 ? `<p class="q-flash ok">${esc(v.intro)}</p>` : ''}
         ${v.last ? `<p class="q-flash ${v.last.right ? 'ok' : 'bad'}">${v.last.right ? `Right! +${v.last.points}` : `${v.last.timeout ? 'Too slow!' : 'Not quite.'} ${hooks.plain() ? 'The right answer was' : 'Correct answer'}: <b>${esc(v.last.answer)}</b>`}</p>` : ''}`;
       startTimer();
     } else if (v.kind === 'how') {
@@ -631,12 +644,8 @@ export function initQuest(hooks) {
       return;
     }
     // the last network of a level has its final exam still to come
-    // a quick run goes straight on to its two questions
-    if (isQuick(story)) {
-      const exam = { gid: v.gid, carry: points, flawless: res.flawless, st };
-      openCard({ kind: 'question', id: v.id, c: startChallenge(v.id, Math.random, examFor(v.id)), last: null, exam, intro: `🏁 ${MINIGAMES[v.gid].name[hooks.plain() ? 'plain' : 'eng']} won! +${num(points)} · ${hooks.plain() ? 'now two quick questions' : 'two questions to unlock the level'}` });
-      return;
-    }
+    // a quick run takes a breath before its two questions: no clock until "I'm ready"
+    if (isQuick(story)) { openCard({ kind: 'breather', id: v.id, gid: v.gid, carry: points, flawless: res.flawless, st }); return; }
     if (examAt(v.id)) { openCard({ kind: 'exam', id: v.id, gid: v.gid, carry: points, flawless: res.flawless, st }); return; }
     bank(v.id, v.gid, points, 0, res.flawless, st);
   }
